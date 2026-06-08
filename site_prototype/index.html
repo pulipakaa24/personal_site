@@ -13,24 +13,46 @@
   body {
     background: #000; color: #fff;
     font-family: "Helvetica Neue", Arial, sans-serif;
-    height: 800vh;                 /* 8 screens of scroll = room for 8 chapters */
+    height: 1500vh;                /* room for the multi-stage storyboard */
     overflow-x: hidden;
   }
   body.editing { height: 100vh; overflow: hidden; }   /* lock scroll in editor mode */
 
   #c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 1; }
 
-  /* Hero title sits behind the model */
+  /* Hero title — upper-left, model overlaps its lower half */
   #title {
     position: fixed; inset: 0; z-index: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; pointer-events: none; will-change: opacity;
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+    padding: 13vh 0 0 7vw; text-align: left; pointer-events: none; will-change: opacity;
   }
   #title h1 {
-    font-weight: 800; letter-spacing: -0.02em; line-height: 0.9;
-    font-size: clamp(40px, 9vw, 150px); text-transform: uppercase;
+    font-weight: 800; letter-spacing: -0.03em; line-height: 0.84;
+    font-size: clamp(46px, 11vw, 188px); text-transform: uppercase;
   }
-  #title p { margin-top: 1rem; font-size: clamp(11px,1.4vw,18px); letter-spacing: 0.32em; text-transform: uppercase; opacity: 0.6; }
+  .ol { color: transparent; -webkit-text-stroke: 1.6px rgba(255,255,255,.9); }
+  #title p { margin-top: 1.1rem; font-size: clamp(11px,1.3vw,16px); letter-spacing: 0.34em; text-transform: uppercase; opacity: 0.55; }
+
+  /* Section title — top-right; blurb — bottom-right. Model lives on the left. */
+  #panel {
+    position: fixed; top: 15vh; right: 6vw; z-index: 2; max-width: 40vw; text-align: right;
+    pointer-events: none; will-change: opacity; opacity: 0;
+  }
+  #panel .kick { display: block; font-size: 11px; letter-spacing: .34em; text-transform: uppercase; color: #ff6a00; margin-bottom: .7rem; }
+  #panel h2 { font-weight: 800; letter-spacing: -0.02em; line-height: .92; font-size: clamp(26px, 4.4vw, 64px); text-transform: uppercase; }
+  #blurb {
+    position: fixed; bottom: 9vh; right: 6vw; z-index: 2; max-width: 34vw; text-align: right;
+    font-size: clamp(12.5px, 1.1vw, 15px); line-height: 1.55; color: rgba(255,255,255,.72);
+    pointer-events: none; will-change: opacity; opacity: 0;
+  }
+  #blurb .b-tag { display: block; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: rgba(255,255,255,.38); margin-bottom: .55rem; }
+
+  /* Dimension overlay (technical-drawing annotations) */
+  #dims { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0; }
+  #dims svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  #dims .dl { stroke: rgba(255,255,255,.55); stroke-width: 1; fill: none; }
+  #dims .dx { stroke: rgba(255,255,255,.28); stroke-width: 1; fill: none; }
+  #dims .dt { fill: #fff; font-size: 12px; font-family: "Helvetica Neue",Arial,sans-serif; letter-spacing: .04em; }
 
   .hud { position: fixed; z-index: 3; font-size: 12px; letter-spacing: 0.05em; font-variant-numeric: tabular-nums; }
   #hud-progress { top: 14px; left: 14px; opacity: 0.7; }
@@ -51,7 +73,8 @@
   /* ---- Grouping editor overlay ---- */
   #editor { position: fixed; z-index: 4; inset: 0; pointer-events: none; display: none; }
   body.editing #editor { display: block; }
-  body.editing #scrollhint, body.editing #title { display: none; }
+  body.editing #scrollhint, body.editing #title,
+body.editing #panel, body.editing #blurb, body.editing #dims { display: none; }
   #legend {
     position: fixed; top: 14px; right: 14px; pointer-events: auto;
     background: rgba(15,15,15,.85); border: 1px solid #333; border-radius: 10px; padding: 12px 14px; font-size: 12px; line-height: 1.7;
@@ -108,7 +131,10 @@
 
 <div id="loader">Loading model…</div>
 
-<div id="title"><h1>Guadaloop<br>Test Rig</h1><p>Scroll to explore</p></div>
+<div id="title"><h1>Guadaloop<br><span class="ol">Testrig</span></h1><p>Scroll to explore</p></div>
+<div id="panel"><span class="kick"></span><h2></h2></div>
+<div id="blurb"></div>
+<div id="dims"></div>
 <canvas id="c"></canvas>
 
 <div id="hud-progress" class="hud">0%</div>
@@ -242,8 +268,60 @@ let editMode = false;
 let progress = 0, shownProgress = 0;
 
 const titleEl = document.getElementById('title');
-const h1 = titleEl.querySelector('h1');
 const psub = titleEl.querySelector('p');
+const panelEl = document.getElementById('panel');
+const panelKick = panelEl.querySelector('.kick');
+const panelTitle = panelEl.querySelector('h2');
+const blurbEl = document.getElementById('blurb');
+const dimsEl = document.getElementById('dims');
+
+// ---------- storyboard vocabulary ----------
+// Fine-grained "vis-groups" so sub-parts fade independently.
+const VG = ['yokecore','coil','sensormod','sensorholder','railclamp','railbar','chassis','other'];
+// Classify a mesh into a vis-group by name/material (independent of the editor groups).
+function semanticTag(o){
+  const n = o.name || '';
+  const mats = Array.isArray(o.material) ? o.material : [o.material];
+  if (mats.some(m => /polishedcopper/i.test(m.name||''))) return 'coil';     // the copper coils
+  if (/BabyYoke/i.test(n)) return 'yokecore';
+  if (/DW-AD-509/i.test(n)) return 'sensormod';
+  if (/SensorMountLev|MidSensorHolder/i.test(n)) return 'sensorholder';
+  if (/Slide[ _]rail[ _]slider|SlideHolderTrack|MirrorSlide/i.test(n)) return 'railclamp';
+  if (/Slide[ _]rail[ _]metal[ _]bar|TrackPiece|Steel[ _]Bar|LinMount/i.test(n)) return 'railbar';
+  if (/Tslot|TwinExtrusion|Slide_Yoke_Mount/i.test(n)) return 'chassis';
+  // unnamed instances: split the sensors region by material (modules are aluminium,
+  // the printed holders are plastic) so every holder fades together
+  const grp = o.userData.group;
+  if (grp === 'sensors') return mats.some(m => /satinfinishaluminum/i.test(m.name||'')) ? 'sensormod' : 'sensorholder';
+  return ({yoke:'yokecore', rails:'railclamp', chassis:'chassis'})[grp] || 'other';
+}
+// Build a full per-vis-group opacity map. `ALL` sets the default; named keys override.
+const TRANS = 0.28;                                  // "translucent" opacity
+function vis(spec){ const o={}; for(const g of VG) o[g] = (spec.ALL!==undefined?spec.ALL:0); for(const k in spec) if(k!=='ALL') o[k]=spec[k]; return o; }
+
+// Section headings shown in the side panel (kept stable across a section's sub-stages).
+const SECTION = { yoke:{kick:'Subsystem 01', title:'Levitation<br>Yoke'},
+                  sensors:{kick:'Subsystem 02', title:'DW-AD-509<br>Gap Sensors'},
+                  rails:{kick:'Subsystem 03', title:'Slide-Rail<br>System'} };
+
+// Camera view directions (+ up vector) for each named angle.
+const VIEWS = {
+  iso:   { dir: new THREE.Vector3(0.85, 0.5, 1.0).normalize(),  up: new THREE.Vector3(0,1,0) },
+  front: { dir: new THREE.Vector3(0.02, 0.08, 1.0).normalize(), up: new THREE.Vector3(0,1,0) },
+  top:   { dir: new THREE.Vector3(0.0, 1.0, 0.0001).normalize(), up: new THREE.Vector3(0,0,-1) },
+};
+
+// Trapezoidal motion profile: normalized position 0..1 for input 0..1, built as the
+// integral of a trapezoidal velocity (smooth accel -> cruise -> smooth decel).
+function trap(s){
+  s = Math.max(0, Math.min(1, s));
+  const ta = 0.3, vmax = 1/(1-ta);
+  if (s < ta)        return 0.5*vmax/ta*s*s;
+  if (s < 1-ta)      return 0.5*vmax*ta + vmax*(s-ta);
+  const d = 1-s;     return 1 - 0.5*vmax/ta*d*d;
+}
+// up-then-down (smooth both ways): 0 -> 1 (at midpoint) -> 0
+const trapUpDown = t => t < 0.5 ? trap(t/0.5) : trap((1-t)/0.5);
 
 // ---------- load ----------
 // Part -> group assignments come from groups.json (which you can edit). Anything
@@ -300,6 +378,10 @@ new GLTFLoader().load('model_plain.glb', (gltf) => {
     o.userData.curOpacity = 1;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     o.userData.baseColors = mats.map(m => m.color ? m.color.clone() : null);
+    // finer "vis-group" used by the storyboard (so coils can fade independently of
+    // the yoke cores, sensor holders independently of the modules, etc.)
+    o.userData.vis = semanticTag(o);
+    o.userData.basePos = o.position.clone();   // for the trapezoidal motion finale
     meshes.push(o);
   });
 
@@ -310,24 +392,58 @@ new GLTFLoader().load('model_plain.glb', (gltf) => {
   scene.add(model);
   model.updateMatrixWorld(true);
 
-  // per-group world bounding boxes (computed at assembled / rest pose)
+  // world bounding boxes (assembled / rest pose) used for camera framing
   boxes.all = new THREE.Box3().setFromObject(model);
-  for (const g of ['yoke','sensors','rails','chassis']) {
+  const boxOf = (vgs) => {
     const b = new THREE.Box3();
-    meshes.filter(m => m.userData.group === g).forEach(m => b.expandByObject(m));
-    boxes[g] = b.isEmpty() ? boxes.all.clone() : b;
-  }
+    meshes.filter(m => vgs.includes(m.userData.vis)).forEach(m => b.expandByObject(m));
+    return b.isEmpty() ? boxes.all.clone() : b;
+  };
+  boxes.yoke    = boxOf(['yokecore','coil']);
+  boxes.sensors = boxOf(['sensormod','sensorholder']);
+  boxes.rails   = boxOf(['railclamp','railbar']);
+  boxes.chassis = boxOf(['chassis']);
+  boxes.sizeY   = boxes.all.getSize(new THREE.Vector3()).y;   // reference for travel amplitude
 
   // ---------- the scroll storyboard ----------
+  // Each stage: scroll range, framing box, camera view + horizontal pan (model to
+  // the left), per-vis-group opacity, the side panel + bottom blurb, and optional
+  // dimension overlay / part motion. Blurbs are placeholders for now.
+  const side = (sec, blurb, tag) => ({ mode:'side', sec, blurb, tag });
   chapters = [
-    { r:[0.00,0.10], focus:'all',     box:'all',     title:'Guadaloop<br>Test Rig',  sub:'Scroll to explore' },
-    { r:[0.10,0.28], focus:'yoke',    box:'yoke',    title:'Levitation Yoke',        sub:'Yoke + electromagnetic coils' },
-    { r:[0.28,0.37], focus:'all',     box:'all',     title:'Full Assembly',          sub:'' },
-    { r:[0.37,0.55], focus:'sensors', box:'sensors', title:'DW-AD-509-M30',          sub:'Gap-height sensors' },
-    { r:[0.55,0.64], focus:'all',     box:'all',     title:'Full Assembly',          sub:'' },
-    { r:[0.64,0.82], focus:'rails',   box:'rails',   title:'Slide-Rail System',      sub:'Constrained linear motion' },
-    { r:[0.82,0.89], focus:'all',     box:'all',     title:'Full Assembly',          sub:'' },
-    { r:[0.89,1.00], focus:'chassis', box:'chassis', title:'Chassis Structure',      sub:'T-slot frame & mounts' },
+    // ---- intro ----
+    { r:[0.00,0.07], box:'all', view:'iso', pan:0,    vis:vis({ALL:1}),
+      panel:{mode:'hero'}, blurb:'', dims:null },
+
+    // ---- yoke: pan left, coils translucent over opaque cores ----
+    { r:[0.07,0.17], box:'yoke', view:'iso',  pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
+      panel:side('yoke','Two C-cores wrapped with the levitation coils. The coils render translucent so the steel cores they drive stay readable.','Placeholder copy'), dims:null },
+    { r:[0.17,0.26], box:'yoke', view:'front', pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
+      panel:side('yoke','Head-on: the working air-gap faces of the cores. Dimensions are placeholders pending the real drawing.','Front elevation'), dims:'yokeFront' },
+    { r:[0.26,0.34], box:'yoke', view:'top',  pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
+      panel:side('yoke','Top-down: core spacing and coil footprint. Placeholder dimensions.','Plan view'), dims:'yokeTop' },
+    // brief return to the full assembly — NO title
+    { r:[0.34,0.39], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
+
+    // ---- sensors: iso, iso + translucent holders, top-down with dims ----
+    { r:[0.39,0.48], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:1}),
+      panel:side('sensors','Eddy-current gap-height sensors mounted around the rig. Isometric overview.','Placeholder copy'), dims:null },
+    { r:[0.48,0.56], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:TRANS}),
+      panel:side('sensors','The printed holder pieces turn translucent so the sensor bodies and their aim are clear.','Exploded read'), dims:null },
+    { r:[0.56,0.64], box:'sensors', view:'top', pan:0.5, vis:vis({sensormod:1, sensorholder:TRANS}),
+      panel:side('sensors','Top-down sensor placement. Placeholder dimensions.','Plan view'), dims:'sensorTop' },
+    { r:[0.64,0.69], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
+
+    // ---- rails: build-up reveal, then trapezoidal travel ----
+    { r:[0.69,0.77], box:'rails', view:'iso', pan:0.5, vis:vis({railclamp:TRANS}),
+      panel:side('rails','Start with the track-interface carriages alone, shown translucent.','Stage 1 · carriages'), dims:null },
+    { r:[0.77,0.84], box:'rails', view:'iso', pan:0.5, vis:vis({railclamp:1, railbar:TRANS}),
+      panel:side('rails','Carriages solidify; the rail/track they ride fades in translucently.','Stage 2 · track'), dims:null },
+    { r:[0.84,0.90], box:'all', view:'iso', pan:0.4, vis:vis({ALL:1}),
+      panel:side('rails','Everything goes opaque and the rest of the assembly returns around the rail.','Stage 3 · assembled'), dims:null },
+    { r:[0.90,1.00], box:'all', view:'iso', pan:0, vis:vis({ALL:1}),
+      panel:side('rails','The chassis and lower carriages travel the rail up and back down on a smooth trapezoidal profile.','Stage 4 · travel'),
+      dims:null, motion:{ groups:['chassis','railclamp'], axis:'y', amp:0.22 } },
   ];
 
   controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
@@ -340,17 +456,30 @@ new GLTFLoader().load('model_plain.glb', (gltf) => {
 });
 }   // end startLoad
 
-// camera framing for a bounding box
-function camFor(box, out) {
-  const c = box.getCenter(new THREE.Vector3());
-  const s = box.getSize(new THREE.Vector3());
-  const r = Math.max(s.x, s.y, s.z, 1e-4) * 0.5;
-  const dist = (r / Math.tan((camera.fov * Math.PI/180)/2)) * 1.6;
-  out.pos.copy(c).add(VIEWDIR.clone().multiplyScalar(dist));
-  out.target.copy(c);
+// ---------- small math helpers ----------
+function smoothstep(t){ t = Math.max(0, Math.min(1, t)); return t*t*(3-2*t); }
+const clamp01 = t => Math.max(0, Math.min(1, t));
+const lerp = (a,b,t) => a + (b-a)*t;
+
+// ---------- camera framing: box + view angle + horizontal pan ----------
+const _c = new THREE.Vector3(), _s = new THREE.Vector3(), _right = new THREE.Vector3();
+function camFor(box, viewKey, pan, fit, out) {
+  const v = VIEWS[viewKey] || VIEWS.iso;
+  box.getCenter(_c); box.getSize(_s);
+  const r = Math.max(_s.x, _s.y, _s.z, 1e-4) * 0.5;
+  const dist = (r / Math.tan((camera.fov * Math.PI/180)/2)) * (fit || 1.6);
+  out.up.copy(v.up);
+  out.target.copy(_c);
+  out.pos.copy(_c).addScaledVector(v.dir, dist);
+  if (pan) {                                   // move subject to screen-left: shift cam+target along camera-right
+    _right.crossVectors(v.up, v.dir).normalize();
+    const shift = r * pan * 1.5;
+    out.pos.addScaledVector(_right, shift);
+    out.target.addScaledVector(_right, shift);
+  }
 }
-const A = { pos:new THREE.Vector3(), target:new THREE.Vector3() };
-const B = { pos:new THREE.Vector3(), target:new THREE.Vector3() };
+const A = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() };
+const B = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() };
 
 function setOpacity(m, o) {
   o = clamp01(o);
@@ -369,77 +498,115 @@ function setOpacity(m, o) {
   }
 }
 
-// ---------- opacity fade model ----------
-function smoothstep(t){ t = Math.max(0, Math.min(1, t)); return t*t*(3-2*t); }
-const clamp01 = t => Math.max(0, Math.min(1, t));
-const lerp = (a,b,t) => a + (b-a)*t;
-
-// Per-group target opacity inside a given chapter: 1 if that chapter shows the
-// group (it's the chapter's focus, or the chapter shows 'all'), else HIDDEN.
-const HIDDEN = 0.0;
-const targetVis = (c, g) => (c.focus === 'all' || c.focus === g) ? 1.0 : HIDDEN;
-
-// ---------- per-group opacity as a TRAPEZOID over scroll ----------
-// Each group HOLDS its target opacity through the interior of every chapter, and
-// only ramps between values inside a narrow transition zone straddling each
-// chapter boundary. So a focused part stays isolated for (almost) the whole
-// chapter — not just a flash at the very end — and everything else fades back in
-// smoothly as you cross into the next chapter.
-//   PAD = half-width of the transition zone, in scroll-progress units.
-const PAD = 0.035;
-function computeOpacityForGroup(g, p){
-  if (!chapters.length) return 1;
+// ---------- value-over-scroll with trapezoid hold + boundary ramps ----------
+// A value HOLDS through the interior of each chapter and only ramps inside a narrow
+// zone straddling each boundary. valOf(chapterIndex) returns the target value.
+const PAD = 0.03;
+function rampAt(p, valOf){
+  if (!chapters.length) return valOf ? valOf(0) : 0;
   p = clamp01(p);
   let ci = chapters.findIndex(c => p <= c.r[1]);
   if (ci < 0) ci = chapters.length - 1;
-  const c = chapters[ci];
-  const vCur = targetVis(c, g);
-
-  // ramp across the LEFT boundary (previous chapter -> this one)
+  const c = chapters[ci], vCur = valOf(ci);
   if (ci > 0 && p < c.r[0] + PAD){
-    const vPrev = targetVis(chapters[ci-1], g);
-    if (vPrev !== vCur){
-      const t = smoothstep((p - (c.r[0] - PAD)) / (2*PAD));
-      return lerp(vPrev, vCur, t);
-    }
+    const vP = valOf(ci-1);
+    if (vP !== vCur){ const t = smoothstep((p - (c.r[0] - PAD)) / (2*PAD)); return lerp(vP, vCur, t); }
   }
-  // ramp across the RIGHT boundary (this chapter -> next one)
   if (ci < chapters.length-1 && p > c.r[1] - PAD){
-    const vNext = targetVis(chapters[ci+1], g);
-    if (vNext !== vCur){
-      const t = smoothstep((p - (c.r[1] - PAD)) / (2*PAD));
-      return lerp(vCur, vNext, t);
-    }
+    const vN = valOf(ci+1);
+    if (vN !== vCur){ const t = smoothstep((p - (c.r[1] - PAD)) / (2*PAD)); return lerp(vCur, vN, t); }
   }
   return vCur;
 }
+const computeOpacityFor = (vg, p) => rampAt(p, i => chapters[i].vis[vg]);
+
+// ---------- trapezoidal part travel ----------
+const MOTION_VG = new Set(['chassis','railclamp']);
+function applyMotion(i, localT){
+  const m = chapters[i].motion;
+  const disp = m ? (m.amp * (boxes.sizeY || 1) * trapUpDown(localT)) : 0;
+  for (const o of meshes){
+    if (!MOTION_VG.has(o.userData.vis)) continue;
+    const d = (m && m.groups.includes(o.userData.vis)) ? disp : 0;
+    o.position.copy(o.userData.basePos);
+    o.position.y += d;
+  }
+}
+
+// ---------- dimension overlay ----------
+const _pp = new THREE.Vector3();
+function project(v){ _pp.copy(v).project(camera); return { x:(_pp.x*0.5+0.5)*innerWidth, y:(-_pp.y*0.5+0.5)*innerHeight }; }
+function drawDims(kind){
+  const box = kind.startsWith('yoke') ? boxes.yoke : kind.startsWith('sensor') ? boxes.sensors : boxes.all;
+  const mn = box.min, mx = box.max, V = THREE.Vector3, segs = [];
+  if (kind.endsWith('Front')){
+    const z = mx.z;
+    segs.push([ new V(mn.x,mn.y,z), new V(mx.x,mn.y,z), 'W —— mm' ]);
+    segs.push([ new V(mn.x,mn.y,z), new V(mn.x,mx.y,z), 'H —— mm' ]);
+  } else { // Top
+    const y = mx.y;
+    segs.push([ new V(mn.x,y,mn.z), new V(mx.x,y,mn.z), 'W —— mm' ]);
+    segs.push([ new V(mn.x,y,mn.z), new V(mn.x,y,mx.z), 'D —— mm' ]);
+  }
+  let s = `<svg viewBox="0 0 ${innerWidth} ${innerHeight}">`;
+  for (const [pa,pb,label] of segs){
+    const a = project(pa), b = project(pb), cx = (a.x+b.x)/2, cy = (a.y+b.y)/2;
+    s += `<line class="dl" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
+    s += `<circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="2.5" fill="#fff"/><circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="2.5" fill="#fff"/>`;
+    s += `<text class="dt" x="${cx.toFixed(1)}" y="${(cy-7).toFixed(1)}" text-anchor="middle">${label}</text>`;
+  }
+  dimsEl.innerHTML = s + `</svg>`;
+}
+
+// ---------- overlays (hero / side panel / blurb / dims) ----------
+let curPanelSec = '', curBlurbKey = '';
+function updateOverlays(p, i, c, localT){
+  // hero title — only in the intro chapter, fades out as you leave
+  titleEl.style.opacity = (i === 0 ? Math.min((1-localT)/0.25, 1) : 0).toFixed(3);
+
+  // side panel — held across a section's sub-stages, ramps to 0 at none/hero chapters
+  panelEl.style.opacity = rampAt(p, k => (chapters[k].panel && chapters[k].panel.mode === 'side') ? 1 : 0).toFixed(3);
+  if (c.panel && c.panel.mode === 'side' && c.panel.sec && curPanelSec !== c.panel.sec){
+    const sec = SECTION[c.panel.sec];
+    panelKick.innerHTML = sec.kick; panelTitle.innerHTML = sec.title; curPanelSec = c.panel.sec;
+  }
+
+  // blurb — fades per chapter (dips at each boundary so the text can swap)
+  const hasBlurb = c.panel && c.panel.mode === 'side' && c.panel.blurb;
+  blurbEl.style.opacity = (hasBlurb ? Math.min(localT/0.18,1) * Math.min((1-localT)/0.18,1) : 0).toFixed(3);
+  if (hasBlurb){
+    const key = i + '|' + c.panel.blurb;
+    if (curBlurbKey !== key){ blurbEl.innerHTML = (c.panel.tag ? `<span class="b-tag">${c.panel.tag}</span>` : '') + c.panel.blurb; curBlurbKey = key; }
+  }
+
+  // dimensions overlay
+  const dimsA = c.dims ? Math.min(localT/0.2,1) * Math.min((1-localT)/0.2,1) : 0;
+  dimsEl.style.opacity = dimsA.toFixed(3);
+  if (c.dims && dimsA > 0.001) drawDims(c.dims);
+}
 
 // ---------- deterministic scroll resolver ----------
-// A single (damped) scroll position drives camera, opacity and title together so
-// the fade is locked to the camera move — the Apple-style "focus" feel.
 function resolve(p) {
   if (!chapters.length) return;
-
   let i = chapters.findIndex(c => p <= c.r[1]);
   if (i < 0) i = chapters.length - 1;
   const c = chapters[i], prev = i > 0 ? chapters[i-1] : c;
   const localT = THREE.MathUtils.clamp((p - c.r[0]) / (c.r[1] - c.r[0]), 0, 1);
   const e = ease(localT);
 
-  // camera
-  camFor(boxes[prev.box], A); camFor(boxes[c.box], B);
+  // camera: ease from the previous stage's framing to this stage's framing
+  camFor(boxes[prev.box], prev.view, prev.pan, prev.fit, A);
+  camFor(boxes[c.box],    c.view,    c.pan,    c.fit,    B);
   camera.position.lerpVectors(A.pos, B.pos, e);
   camTarget.lerpVectors(A.target, B.target, e);
+  camera.up.lerpVectors(A.up, B.up, e).normalize();
   camera.lookAt(camTarget);
 
-  // opacity (trapezoid hold + boundary ramps)
-  for (const m of meshes) setOpacity(m, computeOpacityForGroup(m.userData.group, p));
+  // per-part opacity, then trapezoidal travel
+  for (const m of meshes) setOpacity(m, computeOpacityFor(m.userData.vis, p));
+  applyMotion(i, e);
 
-  // title fade
-  h1.innerHTML = c.title; psub.textContent = c.sub;
-  const fin = Math.min(localT / 0.2, 1), fout = Math.min((1 - localT) / 0.2, 1);
-  titleEl.style.opacity = String(i === 0 ? fout : Math.min(fin, fout));
-
+  updateOverlays(p, i, c, localT);
   document.getElementById('hud-progress').textContent = Math.round(p * 100) + '%';
 }
 
@@ -469,7 +636,7 @@ function enterEdit() {
   editMode = true; document.body.classList.add('editing');
   controls.enabled = true;
   controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
-  camFor(boxes.all, A); camera.position.copy(A.pos); camera.lookAt(controls.target);
+  camFor(boxes.all, 'iso', 0, 1.6, A); camera.up.set(0,1,0); camera.position.copy(A.pos); camera.lookAt(controls.target);
   applyEditColors(true);
 }
 function exitEdit() {
