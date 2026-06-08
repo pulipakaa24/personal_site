@@ -11,3 +11,8 @@ Finally, do something similar for the slide rails, turning the track interface p
 
 Each of these stages should, once again, be accompanied by a placeholder blurb for now.
 
+Oh one more thing is that at the beginning when the user scrolls up, the title should scroll up while the current animation runs. Everything else should be left visually unchanged, but the "Guadaloop Testrig Scroll To Explore" title should scroll up out of frame rather than fading out.
+
+Then, update the thumbnail on the main page to include the image at @UsefulCrop.png. No need for the "live 3d" tag, maybe at the most one of those subtle cube 3D labels on the bottom corner of the thumbnail.
+
+Then, Look through all the folders that now have .glb files and try to replicate this layout in those respective projects (if they exist). If not, don't worry about adding them. This should leave just the blindmaster project, the rescuevision project, and the smartPT project to take care of. They should get a similar index.html card as the guadaloop testrig (row-wide) with the thumbnail for rescuevision being @groupPic.gif, for smartPT being @stagePic.jpeg, and for BlindMaster being the logo icon in @BlindMaster/blinds_flutter. Let me know what your thoughts are about this choice of thumbnail. Is it not effective?

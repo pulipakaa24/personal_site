@@ -260,6 +260,7 @@ const ruleGroup = (name) => { for (const [g,re] of RULES) if (re.test(name)) ret
 
 // ---------- state ----------
 let meshes = [];
+const MOVERS = [];           // parts that travel up/down with the chassis sled
 const boxes = {};            // group -> Box3 (world)
 let chapters = [];
 const ease = t => t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;   // easeInOutCubic
@@ -276,24 +277,25 @@ const blurbEl = document.getElementById('blurb');
 const dimsEl = document.getElementById('dims');
 
 // ---------- storyboard vocabulary ----------
-// Fine-grained "vis-groups" so sub-parts fade independently.
-const VG = ['yokecore','coil','sensormod','sensorholder','railclamp','railbar','chassis','other'];
-// Classify a mesh into a vis-group by name/material (independent of the editor groups).
-function semanticTag(o){
+// Fine-grained "vis-groups" so sub-parts fade independently. The rail system is
+// split into its real pieces: the vertical bars, the carriages/sliders, the
+// SlideHolderTrack clamps, and the track plate itself.
+const VG = ['yokecore','coil','sensormod','sensorholder','railbar','railslider','railholder','railtrack','chassis','other'];
+// Classify a mesh into a vis-group by NAME/material. Returns null when only an
+// unnamed instance — those are resolved by geometry backfill at load time.
+function semanticByName(o){
   const n = o.name || '';
   const mats = Array.isArray(o.material) ? o.material : [o.material];
-  if (mats.some(m => /polishedcopper/i.test(m.name||''))) return 'coil';     // the copper coils
+  if (mats.some(m => /polishedcopper/i.test(m.name||''))) return 'coil';            // copper coils
   if (/BabyYoke/i.test(n)) return 'yokecore';
   if (/DW-AD-509/i.test(n)) return 'sensormod';
   if (/SensorMountLev|MidSensorHolder/i.test(n)) return 'sensorholder';
-  if (/Slide[ _]rail[ _]slider|SlideHolderTrack|MirrorSlide/i.test(n)) return 'railclamp';
-  if (/Slide[ _]rail[ _]metal[ _]bar|TrackPiece|Steel[ _]Bar|LinMount/i.test(n)) return 'railbar';
-  if (/Tslot|TwinExtrusion|Slide_Yoke_Mount/i.test(n)) return 'chassis';
-  // unnamed instances: split the sensors region by material (modules are aluminium,
-  // the printed holders are plastic) so every holder fades together
-  const grp = o.userData.group;
-  if (grp === 'sensors') return mats.some(m => /satinfinishaluminum/i.test(m.name||'')) ? 'sensormod' : 'sensorholder';
-  return ({yoke:'yokecore', rails:'railclamp', chassis:'chassis'})[grp] || 'other';
+  if (/Slide[ _]rail[ _]metal[ _]bar/i.test(n)) return 'railbar';                   // vertical rails
+  if (/Slide[ _]rail[ _]slider/i.test(n)) return 'railslider';                      // carriages
+  if (/SlideHolderTrack|MirrorSlide/i.test(n)) return 'railholder';                 // track clamps
+  if (/TrackPiece/i.test(n)) return 'railtrack';                                    // the track plate
+  if (/Tslot|TwinExtrusion|Slide_Yoke_Mount|Steel[ _]Bar|LinMount/i.test(n)) return 'chassis';
+  return null;
 }
 // Build a full per-vis-group opacity map. `ALL` sets the default; named keys override.
 const TRANS = 0.28;                                  // "translucent" opacity
@@ -378,12 +380,18 @@ new GLTFLoader().load('model_plain.glb', (gltf) => {
     o.userData.curOpacity = 1;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     o.userData.baseColors = mats.map(m => m.color ? m.color.clone() : null);
-    // finer "vis-group" used by the storyboard (so coils can fade independently of
-    // the yoke cores, sensor holders independently of the modules, etc.)
-    o.userData.vis = semanticTag(o);
-    o.userData.basePos = o.position.clone();   // for the trapezoidal motion finale
     meshes.push(o);
   });
+
+  // finer storyboard "vis-group": name first, then geometry backfill so unnamed
+  // duplicate instances inherit a named sibling's tag (e.g. the extra SlideHolderTrack
+  // instances), then fall back by editor group.
+  const geoSem = new Map();
+  for (const o of meshes){ const t = semanticByName(o); if (t) geoSem.set(o.geometry.uuid, t); }
+  for (const o of meshes){
+    o.userData.vis = semanticByName(o) || geoSem.get(o.geometry.uuid)
+      || ({ yoke:'yokecore', chassis:'chassis' })[o.userData.group] || 'other';
+  }
 
   // recentre at origin
   let box = new THREE.Box3().setFromObject(model);
@@ -401,15 +409,31 @@ new GLTFLoader().load('model_plain.glb', (gltf) => {
   };
   boxes.yoke    = boxOf(['yokecore','coil']);
   boxes.sensors = boxOf(['sensormod','sensorholder']);
-  boxes.rails   = boxOf(['railclamp','railbar']);
+  boxes.rails   = boxOf(['railbar','railslider','railholder','railtrack']);
   boxes.chassis = boxOf(['chassis']);
   boxes.sizeY   = boxes.all.getSize(new THREE.Vector3()).y;   // reference for travel amplitude
+
+  // The "sled" that travels the rails: the chassis + everything it carries (yoke,
+  // sensors, coils) + the LOWER carriages (slider-2), which are bolted to it. The
+  // bars, track, top clamps and upper carriages stay put. We translate in WORLD +Y
+  // (precompute each part's world origin + its parent's inverse so the move is exact
+  // regardless of the part's own transform).
+  const MOVE_VG = new Set(['chassis','yokecore','coil','sensormod','sensorholder']);
+  MOVERS.length = 0;
+  for (const o of meshes){
+    const lowerSlider = /slide[ _]rail[ _]slider-2/i.test(o.name || '');
+    if (!(MOVE_VG.has(o.userData.vis) || lowerSlider)) continue;
+    o.userData.worldBase = o.getWorldPosition(new THREE.Vector3());
+    o.userData.parentInv = new THREE.Matrix4().copy(o.parent.matrixWorld).invert();
+    MOVERS.push(o);
+  }
 
   // ---------- the scroll storyboard ----------
   // Each stage: scroll range, framing box, camera view + horizontal pan (model to
   // the left), per-vis-group opacity, the side panel + bottom blurb, and optional
   // dimension overlay / part motion. Blurbs are placeholders for now.
   const side = (sec, blurb, tag) => ({ mode:'side', sec, blurb, tag });
+  const LATE = [0.45, 0.85];   // delayed fade window: reveal AFTER the camera pulls away
   chapters = [
     // ---- intro ----
     { r:[0.00,0.07], box:'all', view:'iso', pan:0,    vis:vis({ALL:1}),
@@ -422,28 +446,32 @@ new GLTFLoader().load('model_plain.glb', (gltf) => {
       panel:side('yoke','Head-on: the working air-gap faces of the cores. Dimensions are placeholders pending the real drawing.','Front elevation'), dims:'yokeFront' },
     { r:[0.26,0.34], box:'yoke', view:'top',  pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
       panel:side('yoke','Top-down: core spacing and coil footprint. Placeholder dimensions.','Plan view'), dims:'yokeTop' },
-    // brief return to the full assembly — NO title
-    { r:[0.34,0.39], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
+    // brief return to the full assembly — NO title; rest fades in LATE
+    { r:[0.34,0.40], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, fade:LATE },
 
     // ---- sensors: iso, iso + translucent holders, top-down with dims ----
-    { r:[0.39,0.48], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:1}),
+    { r:[0.40,0.48], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:1}),
       panel:side('sensors','Eddy-current gap-height sensors mounted around the rig. Isometric overview.','Placeholder copy'), dims:null },
     { r:[0.48,0.56], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:TRANS}),
       panel:side('sensors','The printed holder pieces turn translucent so the sensor bodies and their aim are clear.','Exploded read'), dims:null },
     { r:[0.56,0.64], box:'sensors', view:'top', pan:0.5, vis:vis({sensormod:1, sensorholder:TRANS}),
       panel:side('sensors','Top-down sensor placement. Placeholder dimensions.','Plan view'), dims:'sensorTop' },
-    { r:[0.64,0.69], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
+    { r:[0.64,0.70], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, fade:LATE },
 
     // ---- rails: build-up reveal, then trapezoidal travel ----
-    { r:[0.69,0.77], box:'rails', view:'iso', pan:0.5, vis:vis({railclamp:TRANS}),
-      panel:side('rails','Start with the track-interface carriages alone, shown translucent.','Stage 1 · carriages'), dims:null },
-    { r:[0.77,0.84], box:'rails', view:'iso', pan:0.5, vis:vis({railclamp:1, railbar:TRANS}),
-      panel:side('rails','Carriages solidify; the rail/track they ride fades in translucently.','Stage 2 · track'), dims:null },
-    { r:[0.84,0.90], box:'all', view:'iso', pan:0.4, vis:vis({ALL:1}),
+    // Stage 1: bars + sliders solid, the SlideHolderTrack clamps translucent.
+    { r:[0.70,0.78], box:'rails', view:'iso', pan:0.5, vis:vis({railbar:1, railslider:1, railholder:TRANS}),
+      panel:side('rails','The vertical rails and their carriages, with the track clamps shown translucent.','Stage 1 · rails & carriages'), dims:null },
+    // Stage 2: clamps solid; the track plate itself fades in translucent.
+    { r:[0.78,0.85], box:'rails', view:'iso', pan:0.5, vis:vis({railbar:1, railslider:1, railholder:1, railtrack:TRANS}),
+      panel:side('rails','The clamps solidify and the track plate they carry fades in translucently.','Stage 2 · track'), dims:null },
+    // Stage 3: everything opaque, the rest of the assembly returns.
+    { r:[0.85,0.91], box:'all', view:'iso', pan:0.35, vis:vis({ALL:1}),
       panel:side('rails','Everything goes opaque and the rest of the assembly returns around the rail.','Stage 3 · assembled'), dims:null },
-    { r:[0.90,1.00], box:'all', view:'iso', pan:0, vis:vis({ALL:1}),
-      panel:side('rails','The chassis and lower carriages travel the rail up and back down on a smooth trapezoidal profile.','Stage 4 · travel'),
-      dims:null, motion:{ groups:['chassis','railclamp'], axis:'y', amp:0.22 } },
+    // Stage 4: the sled (chassis + yoke + sensors + lower carriages) travels up the rail and back down.
+    { r:[0.91,1.00], box:'all', view:'iso', pan:0, vis:vis({ALL:1}),
+      panel:side('rails','The chassis — carrying the yoke, sensors and its lower carriages — travels up the rails and back down on a smooth trapezoidal profile.','Stage 4 · travel'),
+      dims:null, motion:{ amp:0.16 } },
   ];
 
   controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
@@ -498,38 +526,46 @@ function setOpacity(m, o) {
   }
 }
 
-// ---------- value-over-scroll with trapezoid hold + boundary ramps ----------
-// A value HOLDS through the interior of each chapter and only ramps inside a narrow
-// zone straddling each boundary. valOf(chapterIndex) returns the target value.
-const PAD = 0.03;
-function rampAt(p, valOf){
-  if (!chapters.length) return valOf ? valOf(0) : 0;
-  p = clamp01(p);
-  let ci = chapters.findIndex(c => p <= c.r[1]);
-  if (ci < 0) ci = chapters.length - 1;
-  const c = chapters[ci], vCur = valOf(ci);
-  if (ci > 0 && p < c.r[0] + PAD){
-    const vP = valOf(ci-1);
-    if (vP !== vCur){ const t = smoothstep((p - (c.r[0] - PAD)) / (2*PAD)); return lerp(vP, vCur, t); }
-  }
-  if (ci < chapters.length-1 && p > c.r[1] - PAD){
-    const vN = valOf(ci+1);
-    if (vN !== vCur){ const t = smoothstep((p - (c.r[1] - PAD)) / (2*PAD)); return lerp(vCur, vN, t); }
-  }
-  return vCur;
+// ---------- per-chapter opacity ----------
+// Each chapter ramps a vis-group from the PREVIOUS chapter's value to its own,
+// over a window in localT (default early). The window holds the value for the rest
+// of the chapter — so a view's isolation lasts its whole stage. Return chapters use
+// a LATE window so the rest of the assembly only fades back in after the camera has
+// already pulled away from the subsystem's last view.
+const DEFAULT_FADE = [0.0, 0.3];
+function opacityFor(vg, i, localT){
+  const cur = chapters[i].vis[vg];
+  const prev = i > 0 ? chapters[i-1].vis[vg] : cur;
+  if (prev === cur) return cur;
+  const f = chapters[i].fade || DEFAULT_FADE;
+  return lerp(prev, cur, smoothstep((localT - f[0]) / (f[1] - f[0])));
 }
-const computeOpacityFor = (vg, p) => rampAt(p, i => chapters[i].vis[vg]);
 
-// ---------- trapezoidal part travel ----------
-const MOTION_VG = new Set(['chassis','railclamp']);
+// Side-panel opacity. Held at 1 across a section's sub-stages (same section => no
+// dip/flicker), 0 on hero/none chapters. On a NEW section it fades in late (after
+// the camera has arrived + the text has already been swapped while invisible); on
+// the last sub-stage it fades out near the end, and stays black through the full-
+// assembly interludes.
+function panelAlphaFor(i, localT){
+  const c = chapters[i].panel;
+  if (!c || c.mode !== 'side') return 0;
+  const pv = chapters[i-1] && chapters[i-1].panel, nx = chapters[i+1] && chapters[i+1].panel;
+  const samePrev = pv && pv.mode === 'side' && pv.sec === c.sec;
+  const sameNext = nx && nx.mode === 'side' && nx.sec === c.sec;
+  let a = 1;
+  if (!samePrev) a *= smoothstep((localT - 0.42) / 0.22);        // fade the new title IN, late
+  if (!sameNext) a *= 1 - smoothstep((localT - 0.72) / 0.22);    // fade the old title OUT, near end
+  return a;
+}
+
+// ---------- trapezoidal sled travel (world +Y) ----------
+const _mv = new THREE.Vector3();
 function applyMotion(i, localT){
   const m = chapters[i].motion;
-  const disp = m ? (m.amp * (boxes.sizeY || 1) * trapUpDown(localT)) : 0;
-  for (const o of meshes){
-    if (!MOTION_VG.has(o.userData.vis)) continue;
-    const d = (m && m.groups.includes(o.userData.vis)) ? disp : 0;
-    o.position.copy(o.userData.basePos);
-    o.position.y += d;
+  const d = m ? (m.amp * (boxes.sizeY || 1) * trapUpDown(localT)) : 0;
+  for (const o of MOVERS){
+    _mv.copy(o.userData.worldBase); _mv.y += d;       // shift world origin up, then back to parent space
+    o.position.copy(_mv.applyMatrix4(o.userData.parentInv));
   }
 }
 
@@ -564,23 +600,25 @@ function updateOverlays(p, i, c, localT){
   // hero title — only in the intro chapter, fades out as you leave
   titleEl.style.opacity = (i === 0 ? Math.min((1-localT)/0.25, 1) : 0).toFixed(3);
 
-  // side panel — held across a section's sub-stages, ramps to 0 at none/hero chapters
-  panelEl.style.opacity = rampAt(p, k => (chapters[k].panel && chapters[k].panel.mode === 'side') ? 1 : 0).toFixed(3);
+  // side panel. Update the TEXT the instant a new section starts (while alpha is
+  // still 0, so the old title never flashes back), then panelAlphaFor fades it in.
   if (c.panel && c.panel.mode === 'side' && c.panel.sec && curPanelSec !== c.panel.sec){
     const sec = SECTION[c.panel.sec];
     panelKick.innerHTML = sec.kick; panelTitle.innerHTML = sec.title; curPanelSec = c.panel.sec;
   }
+  panelEl.style.opacity = panelAlphaFor(i, localT).toFixed(3);
 
   // blurb — fades per chapter (dips at each boundary so the text can swap)
   const hasBlurb = c.panel && c.panel.mode === 'side' && c.panel.blurb;
-  blurbEl.style.opacity = (hasBlurb ? Math.min(localT/0.18,1) * Math.min((1-localT)/0.18,1) : 0).toFixed(3);
+  blurbEl.style.opacity = (hasBlurb ? Math.min(localT/0.3,1) * Math.min((1-localT)/0.22,1) : 0).toFixed(3);
   if (hasBlurb){
     const key = i + '|' + c.panel.blurb;
     if (curBlurbKey !== key){ blurbEl.innerHTML = (c.panel.tag ? `<span class="b-tag">${c.panel.tag}</span>` : '') + c.panel.blurb; curBlurbKey = key; }
   }
 
-  // dimensions overlay
-  const dimsA = c.dims ? Math.min(localT/0.2,1) * Math.min((1-localT)/0.2,1) : 0;
+  // dimensions overlay — appears once the camera has reached the view (~localT 0.5)
+  const dfin = clamp01((localT - 0.45) / 0.2), dfout = clamp01((1 - localT) / 0.12);
+  const dimsA = c.dims ? dfin * dfout : 0;
   dimsEl.style.opacity = dimsA.toFixed(3);
   if (c.dims && dimsA > 0.001) drawDims(c.dims);
 }
@@ -592,7 +630,8 @@ function resolve(p) {
   if (i < 0) i = chapters.length - 1;
   const c = chapters[i], prev = i > 0 ? chapters[i-1] : c;
   const localT = THREE.MathUtils.clamp((p - c.r[0]) / (c.r[1] - c.r[0]), 0, 1);
-  const e = ease(localT);
+  // camera reaches its target by HOLD, then holds the view for the rest of the stage
+  const HOLD = 0.62, e = ease(clamp01(localT / HOLD));
 
   // camera: ease from the previous stage's framing to this stage's framing
   camFor(boxes[prev.box], prev.view, prev.pan, prev.fit, A);
@@ -602,9 +641,9 @@ function resolve(p) {
   camera.up.lerpVectors(A.up, B.up, e).normalize();
   camera.lookAt(camTarget);
 
-  // per-part opacity, then trapezoidal travel
-  for (const m of meshes) setOpacity(m, computeOpacityFor(m.userData.vis, p));
-  applyMotion(i, e);
+  // per-part opacity, then trapezoidal sled travel
+  for (const m of meshes) setOpacity(m, opacityFor(m.userData.vis, i, localT));
+  applyMotion(i, localT);
 
   updateOverlays(p, i, c, localT);
   document.getElementById('hud-progress').textContent = Math.round(p * 100) + '%';
