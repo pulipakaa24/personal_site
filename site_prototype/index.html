@@ -597,8 +597,12 @@ function drawDims(kind){
 // ---------- overlays (hero / side panel / blurb / dims) ----------
 let curPanelSec = '', curBlurbKey = '';
 function updateOverlays(p, i, c, localT){
-  // hero title — only in the intro chapter, fades out as you leave
-  titleEl.style.opacity = (i === 0 ? Math.min((1-localT)/0.25, 1) : 0).toFixed(3);
+  // hero title — scrolls straight up out of frame (no fade) as the intro animation
+  // begins; everything else is unchanged. Linear w/ scroll so it reads as the title
+  // simply scrolling away. Reverses when you scroll back to the top.
+  const heroExit = clamp01(p / 0.07);
+  titleEl.style.transform = `translateY(${(-heroExit * 80).toFixed(2)}vh)`;
+  titleEl.style.opacity = '1';
 
   // side panel. Update the TEXT the instant a new section starts (while alpha is
   // still 0, so the old title never flashes back), then panelAlphaFor fades it in.
