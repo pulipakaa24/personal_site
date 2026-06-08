@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TweinStein — Aditya Pulipaka</title>
+<meta name="description" content="Autonomous racing robot for ECE445M — a custom RTOS platform with classical wall-following, an RL-residual controller, and a heuristic overtaking state machine. Won the ECE445M final race." />
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/project.css" />
+</head>
+<body>
+
+<nav id="nav">
+  <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navlinks">
+    <a href="../index.html#work">Work</a>
+    <a href="../index.html#about">About</a>
+    <a href="../index.html#contact">Contact</a>
+    <a class="btn" href="../assets/resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
+  </div>
+</nav>
+
+<header class="phero">
+  <div class="wrap">
+    <div class="grid">
+      <div>
+        <a class="back" href="../index.html#work">← Selected Work</a>
+        <span class="eyebrow">Robotics · Embedded <span class="win">· 🏆 1st · ECE445M Final Race</span></span>
+        <h1>TweinStein</h1>
+        <p class="lede">An autonomous racer on a <b>custom RTOS platform</b> — it wall-follows with a PD
+          controller, classifies oncoming objects as walls or cars, and <b>overtakes</b> through a
+          dedicated state machine, with a residual-RL model riding alongside. It <b>won the ECE445M
+          final race.</b></p>
+        <div class="tags">
+          <span class="tag">Custom RTOS (C)</span><span class="tag">LD19 LiDAR</span><span class="tag">IMU · IR</span><span class="tag">CAN · DAC</span><span class="tag">MotorBoard v7</span><span class="tag">Residual RL</span>
+        </div>
+        <div class="actions">
+          <a class="btn" href="#" data-placeholder>Code (course repo) ↗</a>
+        </div>
+        <div class="statusline"><span class="dot"></span> 1st place · ECE445M final race</div>
+      </div>
+      <div class="hero-media reveal">
+        <img src="../assets/projects/tweinstein/tw_hero.jpeg" alt="TweinStein racers on the track" loading="lazy"/>
+        <span class="cap">Race day · 1st place 🏆</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <dl class="facts reveal">
+    <div><dt>Role</dt><dd>RTOS platform · FS · classical control</dd></div>
+    <div><dt>Timeline</dt><dd>Spring 2026</dd></div>
+    <div><dt>Context</dt><dd>ECE445M lab final · team</dd></div>
+    <div><dt>Stack</dt><dd>RTOS · LiDAR · RL residual</dd></div>
+  </dl>
+
+  <section class="block reveal">
+    <h2>Overview</h2>
+    <p>A small autonomous racer that follows walls with a PD controller (modulating its distance
+      setpoint), classifies oncoming objects as static walls or moving cars via an ego-motion-compensated
+      range-rate residual, and executes overtakes through an <code>S_FOLLOW → S_DETECT → S_COMMIT →
+      S_PASS → S_REJOIN</code> state machine. A residual-RL model runs alongside, gated to only apply
+      while wall-following.</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>The problem</h2>
+    <p>ECE445M's lab final is a head-to-head autonomous race: stay on the track, detect and pass slower
+      cars, and don't crash. On top of that, I built the underlying platform — a custom RTOS with a FAT
+      filesystem, heap management, and dynamic process loading from disk — so the racing logic had a real
+      operating system underneath it.</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>Highlights</h2>
+    <div class="dives">
+      <div class="dive">
+        <h3>Classical control for the bulk path</h3>
+        <p>The PD wall-follower modulates <code>dist_ref_cur</code> to shift laterally — the <i>same</i>
+          low-level controller does both following and overtaking, just with a different setpoint. The
+          RL residual is strictly gated to <code>S_FOLLOW</code> so it never fights the passing logic.</p>
+      </div>
+      <div class="dive">
+        <h3>Range-rate object classifier</h3>
+        <p>An ego-motion-compensated residual <code>r = front_filt − front_pred</code> accumulates to
+          distinguish static walls (approaching at ego speed) from moving cars; tuning chases false
+          positives on apexes.</p>
+      </div>
+      <div class="dive">
+        <h3>Overtaking state machine</h3>
+        <p><code>S_FOLLOW → S_DETECT → S_COMMIT → S_PASS → S_REJOIN</code>, with timing guards
+          (<code>T_PASS_MIN</code>, <code>T_CLEAR_MS</code>) against premature rejoins.</p>
+      </div>
+      <div class="dive">
+        <h3>Velocity calibration as a routine</h3>
+        <p>A first-class <code>RobotCalib()</code> drives perfectly straight and computes top speed from
+          the LiDAR range derivative, printing the result to the ST7735 — turning a magic constant into a
+          measured value.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block reveal">
+    <h2>Gallery</h2>
+    <div class="gallery">
+      <figure><img src="../assets/projects/tweinstein/tw_team.jpeg" alt="Team with the TweinStein robot" loading="lazy"/></figure>
+      <figure><img src="../assets/projects/tweinstein/tw_robot.jpeg" alt="TweinStein robot on the track" loading="lazy"/></figure>
+    </div>
+  </section>
+
+  <section class="block reveal">
+    <h2>Results</h2>
+    <ul>
+      <li><b>🏆 1st place</b> in the ECE445M final race (F-0001 format) at UT Austin.</li>
+      <li>Classical-control overtaking integrated with an RL residual, on a custom RTOS.</li>
+      <li>LiDAR/IMU telemetry logged per state-machine branch for post-run failure analysis.</li>
+      <li>Honest limitation: the overtaking feature still needs empirical tuning — and the robot has, regrettably, once driven off a table.</li>
+    </ul>
+  </section>
+
+  <div class="soon reveal">
+    A deeper write-up with log plots of <code>ot_state</code> and <code>dist_ref_cur</code> during a pass
+    is coming. <a href="mailto:adipu@utexas.edu">Reach out</a> for details.
+  </div>
+</div>
+
+<footer class="wrap">
+  <span>© <span id="yr"></span> Aditya Pulipaka</span>
+  <a href="../index.html">← Back to home</a>
+</footer>
+
+<script src="../assets/project.js"></script>
+</body>
+</html>

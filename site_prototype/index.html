@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Guadaloop Levitation Test Rig — Aditya Pulipaka</title>
+<link rel="icon" href="../assets/logo.png" />
+<style>
+  :root {
+    --yoke: #ff6a00; --sensors: #19d3ff; --rails: #39ff88; --chassis: #ff3df0; --other:#8a8a8a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000; color: #fff;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    height: 800vh;                 /* 8 screens of scroll = room for 8 chapters */
+    overflow-x: hidden;
+  }
+  body.editing { height: 100vh; overflow: hidden; }   /* lock scroll in editor mode */
+
+  #c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 1; }
+
+  /* Hero title sits behind the model */
+  #title {
+    position: fixed; inset: 0; z-index: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; pointer-events: none; will-change: opacity;
+  }
+  #title h1 {
+    font-weight: 800; letter-spacing: -0.02em; line-height: 0.9;
+    font-size: clamp(40px, 9vw, 150px); text-transform: uppercase;
+  }
+  #title p { margin-top: 1rem; font-size: clamp(11px,1.4vw,18px); letter-spacing: 0.32em; text-transform: uppercase; opacity: 0.6; }
+
+  .hud { position: fixed; z-index: 3; font-size: 12px; letter-spacing: 0.05em; font-variant-numeric: tabular-nums; }
+  #hud-progress { top: 14px; left: 14px; opacity: 0.7; }
+  #hint { position: fixed; z-index: 3; bottom: 16px; left: 14px; font-size: 11px; letter-spacing: 0.08em; opacity: 0.5; }
+  #scrollhint {
+    position: fixed; z-index: 3; bottom: 20px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; opacity: 0.6;
+    animation: bob 1.8s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,7px)} }
+
+  #loader {
+    position: fixed; inset: 0; z-index: 6; background: #000; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; letter-spacing: 0.3em; text-transform: uppercase; transition: opacity .6s;
+  }
+  #loader.hidden { opacity: 0; pointer-events: none; }
+
+  /* ---- Grouping editor overlay ---- */
+  #editor { position: fixed; z-index: 4; inset: 0; pointer-events: none; display: none; }
+  body.editing #editor { display: block; }
+  body.editing #scrollhint, body.editing #title { display: none; }
+  #legend {
+    position: fixed; top: 14px; right: 14px; pointer-events: auto;
+    background: rgba(15,15,15,.85); border: 1px solid #333; border-radius: 10px; padding: 12px 14px; font-size: 12px; line-height: 1.7;
+    backdrop-filter: blur(6px); max-width: 280px;
+  }
+  #legend h3 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px; }
+  #legend .row { display: flex; align-items: center; gap: 8px; }
+  #legend .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  #legend .muted { opacity: .6; font-size: 11px; margin-top: 8px; }
+  #legend button { margin-top:10px; pointer-events:auto; background:#fff; color:#000; border:0; border-radius:6px; padding:6px 10px; font-weight:700; cursor:pointer; font-size:11px; letter-spacing:.05em;}
+  #picked { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); pointer-events:none;
+    background: rgba(15,15,15,.85); border:1px solid #333; border-radius: 8px; padding: 8px 14px; font-size: 13px; }
+  #dump { position: fixed; inset: 10% 15%; z-index: 7; display:none; background:#0c0c0c; border:1px solid #333; border-radius:12px; padding:16px; }
+  #dump textarea { width:100%; height: calc(100% - 40px); background:#000; color:#9f9; border:1px solid #333; border-radius:8px; font-family: monospace; font-size:12px; padding:10px; resize:none;}
+  #dump .x { float:right; cursor:pointer; pointer-events:auto; }
+
+  /* ---- site theme: top nav + accents (ties this page to the main site) ---- */
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 8;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 16px 22px; pointer-events: none;
+        font-family: "Helvetica Neue", Arial, sans-serif; }
+  nav a { pointer-events: auto; text-decoration: none; }
+  nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .02em; font-size: 14px; color: #fff; }
+  nav .brand img { width: 24px; height: 24px; object-fit: contain; }
+  nav .navright { display: flex; align-items: center; gap: 16px; }
+  nav .lbl { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: rgba(255,255,255,.4); }
+  nav .pbtn { font-size: 12px; font-weight: 700; letter-spacing: .03em; color: #fff;
+              border: 1px solid rgba(255,255,255,.2); border-radius: 999px; padding: 7px 14px; transition: .2s; }
+  nav .pbtn:hover { border-color: #ff6a00; color: #ff6a00; transform: translateY(-1px); }
+  body.editing nav { display: none; }
+  /* accent tints on the existing HUD so it reads as part of the site palette */
+  #scrollhint { color: #ff6a00; opacity: .85; }
+  #hud-progress { color: rgba(255,255,255,.7); }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navright">
+    <span class="lbl">Guadaloop Test Rig</span>
+    <a class="pbtn" href="../index.html#work">← Back to work</a>
+  </div>
+</nav>
+
+<div id="loader">Loading model…</div>
+
+<div id="title"><h1>Guadaloop<br>Test Rig</h1><p>Scroll to explore</p></div>
+<canvas id="c"></canvas>
+
+<div id="hud-progress" class="hud">0%</div>
+<div id="scrollhint">scroll ↓</div>
+<div id="hint">press <b>G</b> to edit part groups</div>
+
+<div id="editor">
+  <div id="legend">
+    <h3>Grouping editor</h3>
+    <div class="row"><span class="sw" style="background:var(--yoke)"></span> yoke (BabyYoke + coils)</div>
+    <div class="row"><span class="sw" style="background:var(--sensors)"></span> sensors (DW-AD modules)</div>
+    <div class="row"><span class="sw" style="background:var(--rails)"></span> rails (slide system)</div>
+    <div class="row"><span class="sw" style="background:var(--chassis)"></span> chassis (frame)</div>
+    <div class="row"><span class="sw" style="background:var(--other)"></span> other / hidden</div>
+    <div class="muted">Drag to orbit. Click a part to cycle its group. Press <b>E</b> to export JSON, <b>G</b> to exit.</div>
+    <button id="exportBtn">Export grouping JSON</button>
+  </div>
+  <div id="picked">click a part…</div>
+</div>
+
+<div id="dump"><span class="x" id="dumpClose">✕ close</span><div style="margin-bottom:8px;font-size:12px;opacity:.7">Copied to clipboard. Paste this into <b>groups.json</b> (replace the whole file), then reload.</div><textarea id="dumpText" readonly></textarea></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------- renderer / scene ----------
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;  // contrast + saturation, like a CAD render
+renderer.toneMappingExposure = 0.8;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+
+// The rig is almost entirely polished metal (steel/aluminium/copper), and metals
+// have NO diffuse response — they're lit purely by what they reflect. The stock
+// RoomEnvironment is a mostly-dark room, so smooth metals mirrored darkness and
+// read as black. This builds a bright, even "studio softbox" environment instead,
+// so metal reads as bright metal; the few white plastics are then handled by tone
+// mapping + restrained direct light rather than being blasted.
+function buildStudioEnv() {
+  const env = new THREE.Scene();
+
+  // Vertical-gradient surround (bright cool top -> dark base). Polished metal
+  // reflects this as the classic chrome gradient: bright at the top edge, falling
+  // off to near-black at the bottom — the thing that makes steel read as steel.
+  const R = 14, geo = new THREE.SphereGeometry(R, 32, 24);
+  const p = geo.attributes.position, cols = [];
+  const top = new THREE.Color(0xeef2f8), mid = new THREE.Color(0x9aa2ae), bot = new THREE.Color(0x232730), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i) / R;                       // -1..1
+    c.copy(mid).lerp(y >= 0 ? top : bot, Math.abs(y));
+    cols.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  env.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true })));
+
+  // HDR softboxes -> crisp specular streaks/highlights on the metal. Tall panels
+  // give the long vertical glints down the steel bars; warm key + cool fill set
+  // the warm-highlight / cool-shadow studio look from the reference render.
+  const panel = (w, h, pos, intensity, color = 0xffffff) => {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshStandardMaterial({ color: 0x000000, emissive: color, emissiveIntensity: intensity })
+    );
+    m.position.set(pos[0], pos[1], pos[2]); m.lookAt(0, 0, 0); env.add(m);
+  };
+  panel(16, 8, [0, 12, 2], 7.0, 0xffffff);   // big overhead key
+  panel(6, 18, [9, 5, 7], 6.0, 0xfff2e2);    // tall warm key (right) -> vertical streaks
+  panel(6, 18, [-9, 4, 4], 3.2, 0xe4ecff);   // tall cool fill (left)
+  panel(10, 10, [-2, 2, -11], 2.4, 0xdce6ff);// cool back rim
+  return pmrem.fromScene(env, 0.06).texture; // low blur -> reflections stay crisp
+}
+scene.environment = buildStudioEnv();
+
+// Direct light is a gentle accent on top of the environment (the env does the real
+// work). Warm camera key + cool fill reinforce the warm-highlight/cool-shadow look;
+// kept low so the white plastics stay bright-white but not blown.
+scene.add(new THREE.HemisphereLight(0xc2d2f0, 0x16181f, 0.35));
+const headKey  = new THREE.DirectionalLight(0xfff1e0, 0.55); // warm, from up-right of camera
+const headFill = new THREE.DirectionalLight(0xdde8ff, 0.28); // cool, from down-left of camera
+scene.add(headKey, headKey.target, headFill, headFill.target);
+
+// Re-aim the lights relative to the camera every frame. Directional lights only
+// care about direction (target - position), so we place each one on the camera
+// side of the (origin-centred) model and point it back at origin.
+const _vd = new THREE.Vector3(), _rt = new THREE.Vector3(), _up = new THREE.Vector3(), _td = new THREE.Vector3();
+function updateHeadlights() {
+  camera.getWorldDirection(_vd);                  // forward, into the scene
+  _rt.crossVectors(_vd, camera.up).normalize();   // camera-right
+  _up.crossVectors(_rt, _vd).normalize();         // camera-up
+  // key: source above-right of the camera
+  _td.copy(_vd).addScaledVector(_up, -0.45).addScaledVector(_rt, -0.35).normalize();
+  headKey.position.copy(_td).multiplyScalar(-50);
+  headKey.target.position.set(0, 0, 0);
+  // fill: source below-left of the camera (opposite quadrant wraps the form)
+  _td.copy(_vd).addScaledVector(_up, 0.35).addScaledVector(_rt, 0.40).normalize();
+  headFill.position.copy(_td).multiplyScalar(-50);
+  headFill.target.position.set(0, 0, 0);
+}
+
+const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 0.001, 1000);
+const camTarget = new THREE.Vector3();
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.enabled = false;
+
+// ---------- grouping config ----------
+const GROUP_COLORS = { yoke:0xff6a00, sensors:0x19d3ff, rails:0x39ff88, chassis:0xff3df0, other:0x8a8a8a };
+const CYCLE = ['yoke','sensors','rails','chassis','other'];
+const RULES = [
+  ['yoke',    /BabyYoke|coil placeholder/i],
+  ['sensors', /DW-AD-509/i],
+  ['rails',   /Slide rail|SlideHolderTrack|MirrorSlide|Slide_Yoke_Mount|Steel Bar|TrackPiece|LinMount/i],
+  ['chassis', /Tslot|TwinExtrusion|SensorMountLev|MidSensorHolder/i],
+];
+const ruleGroup = (name) => { for (const [g,re] of RULES) if (re.test(name)) return g; return null; };
+
+// ---------- state ----------
+let meshes = [];
+const boxes = {};            // group -> Box3 (world)
+let chapters = [];
+const ease = t => t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;   // easeInOutCubic
+const VIEWDIR = new THREE.Vector3(0.85, 0.5, 1.0).normalize();
+let editMode = false;
+let progress = 0, shownProgress = 0;
+
+const titleEl = document.getElementById('title');
+const h1 = titleEl.querySelector('h1');
+const psub = titleEl.querySelector('p');
+
+// ---------- load ----------
+// Part -> group assignments come from groups.json (which you can edit). Anything
+// not listed there falls back to the built-in name rules, then to geometry
+// backfill for unnamed duplicate instances, then 'other'. If groups.json is
+// missing entirely, the page still works on the name rules alone.
+let OVERRIDES = {};
+fetch('groups.json')
+  .then(r => r.ok ? r.json() : {})
+  .then(j => { OVERRIDES = (j && j.groups) ? j.groups : (j || {}); })
+  .catch(() => {})
+  .finally(startLoad);
+
+function startLoad() {
+new GLTFLoader().load('model_plain.glb', (gltf) => {
+  const model = gltf.scene;
+
+  // Grab the polished-steel look from the track (or any steel part) so the vertical
+  // slide-rail bars — authored as bluish "defaultplastic" in CAD — can match it.
+  let steelRef = null;
+  model.traverse(o => {
+    if (steelRef || !o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const s = mats.find(m => /polishedsteel/i.test(m.name || ''));
+    if (s) steelRef = { color: s.color.clone(), metalness: s.metalness, roughness: s.roughness };
+  });
+  const isMetalBar = (name) => /slide[ _]rail[ _]metal[ _]bar/i.test(name || '');
+
+  // independent material per mesh (so opacity/colour can be set per-part);
+  // seed geometry->group from any definite (override or rule) classification
+  const geoGroup = new Map();   // geometry.uuid -> group (for unnamed instances)
+  model.traverse(o => {
+    if (!o.isMesh) return;
+    o.material = Array.isArray(o.material) ? o.material.map(m=>m.clone()) : o.material.clone();
+    const bar = isMetalBar(o.name);
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+      // the studio environment is the main light source now
+      m.envMapIntensity = 0.8;
+      // recolour the vertical bars to the track's steel instead of bluish plastic
+      if (bar && steelRef) { if (m.color) m.color.copy(steelRef.color); m.metalness = steelRef.metalness; m.roughness = steelRef.roughness; }
+      // Satin finish for the metals: a perfect mirror (roughness ~0.1) just
+      // reflects the dark parts of the room and reads black. Brushed/satin metal
+      // reflects the *average* (bright) environment, so it looks like bright steel.
+      if (m.metalness !== undefined && m.metalness > 0.5) m.roughness = Math.max(m.roughness ?? 0.5, 0.34);
+    });
+    const g = OVERRIDES[o.name] || ruleGroup(o.name || '');
+    if (g) geoGroup.set(o.geometry.uuid, g);
+  });
+  // assign groups: groups.json override -> name rule -> geometry backfill -> other
+  model.traverse(o => {
+    if (!o.isMesh) return;
+    const g = OVERRIDES[o.name] || ruleGroup(o.name || '') || geoGroup.get(o.geometry.uuid) || 'other';
+    o.userData.group = g;
+    o.userData.curOpacity = 1;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    o.userData.baseColors = mats.map(m => m.color ? m.color.clone() : null);
+    meshes.push(o);
+  });
+
+  // recentre at origin
+  let box = new THREE.Box3().setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+  model.position.sub(center);
+  scene.add(model);
+  model.updateMatrixWorld(true);
+
+  // per-group world bounding boxes (computed at assembled / rest pose)
+  boxes.all = new THREE.Box3().setFromObject(model);
+  for (const g of ['yoke','sensors','rails','chassis']) {
+    const b = new THREE.Box3();
+    meshes.filter(m => m.userData.group === g).forEach(m => b.expandByObject(m));
+    boxes[g] = b.isEmpty() ? boxes.all.clone() : b;
+  }
+
+  // ---------- the scroll storyboard ----------
+  chapters = [
+    { r:[0.00,0.10], focus:'all',     box:'all',     title:'Guadaloop<br>Test Rig',  sub:'Scroll to explore' },
+    { r:[0.10,0.28], focus:'yoke',    box:'yoke',    title:'Levitation Yoke',        sub:'Yoke + electromagnetic coils' },
+    { r:[0.28,0.37], focus:'all',     box:'all',     title:'Full Assembly',          sub:'' },
+    { r:[0.37,0.55], focus:'sensors', box:'sensors', title:'DW-AD-509-M30',          sub:'Gap-height sensors' },
+    { r:[0.55,0.64], focus:'all',     box:'all',     title:'Full Assembly',          sub:'' },
+    { r:[0.64,0.82], focus:'rails',   box:'rails',   title:'Slide-Rail System',      sub:'Constrained linear motion' },
+    { r:[0.82,0.89], focus:'all',     box:'all',     title:'Full Assembly',          sub:'' },
+    { r:[0.89,1.00], focus:'chassis', box:'chassis', title:'Chassis Structure',      sub:'T-slot frame & mounts' },
+  ];
+
+  controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
+  resolve(0);
+  document.getElementById('loader').classList.add('hidden');
+}, undefined, (err) => {
+  document.getElementById('loader').innerHTML =
+    '<div style="color:#f55;text-align:center">Failed to load model_plain.glb.<br>Serve over HTTP &amp; check the console.</div>';
+  console.error(err);
+});
+}   // end startLoad
+
+// camera framing for a bounding box
+function camFor(box, out) {
+  const c = box.getCenter(new THREE.Vector3());
+  const s = box.getSize(new THREE.Vector3());
+  const r = Math.max(s.x, s.y, s.z, 1e-4) * 0.5;
+  const dist = (r / Math.tan((camera.fov * Math.PI/180)/2)) * 1.6;
+  out.pos.copy(c).add(VIEWDIR.clone().multiplyScalar(dist));
+  out.target.copy(c);
+}
+const A = { pos:new THREE.Vector3(), target:new THREE.Vector3() };
+const B = { pos:new THREE.Vector3(), target:new THREE.Vector3() };
+
+function setOpacity(m, o) {
+  o = clamp01(o);
+  m.userData.curOpacity = o;
+  m.visible = o > 0.002;            // skip drawing fully-faded parts
+  const mats = Array.isArray(m.material) ? m.material : [m.material];
+  for (const mt of mats) {
+    const wantTransparent = o < 0.999;
+    // toggling .transparent flips the blend state — only then force a recompile
+    if (mt.transparent !== wantTransparent) { mt.transparent = wantTransparent; mt.needsUpdate = true; }
+    mt.opacity = o;
+    // Keep depth-writing ON during the fade. A solid CAD part is non-convex, so
+    // with depthWrite off its own far faces paint over its near faces -> "X-ray
+    // inversion". Writing depth makes each part self-occlude and just dim away.
+    mt.depthWrite = true;
+  }
+}
+
+// ---------- opacity fade model ----------
+function smoothstep(t){ t = Math.max(0, Math.min(1, t)); return t*t*(3-2*t); }
+const clamp01 = t => Math.max(0, Math.min(1, t));
+const lerp = (a,b,t) => a + (b-a)*t;
+
+// Per-group target opacity inside a given chapter: 1 if that chapter shows the
+// group (it's the chapter's focus, or the chapter shows 'all'), else HIDDEN.
+const HIDDEN = 0.0;
+const targetVis = (c, g) => (c.focus === 'all' || c.focus === g) ? 1.0 : HIDDEN;
+
+// ---------- per-group opacity as a TRAPEZOID over scroll ----------
+// Each group HOLDS its target opacity through the interior of every chapter, and
+// only ramps between values inside a narrow transition zone straddling each
+// chapter boundary. So a focused part stays isolated for (almost) the whole
+// chapter — not just a flash at the very end — and everything else fades back in
+// smoothly as you cross into the next chapter.
+//   PAD = half-width of the transition zone, in scroll-progress units.
+const PAD = 0.035;
+function computeOpacityForGroup(g, p){
+  if (!chapters.length) return 1;
+  p = clamp01(p);
+  let ci = chapters.findIndex(c => p <= c.r[1]);
+  if (ci < 0) ci = chapters.length - 1;
+  const c = chapters[ci];
+  const vCur = targetVis(c, g);
+
+  // ramp across the LEFT boundary (previous chapter -> this one)
+  if (ci > 0 && p < c.r[0] + PAD){
+    const vPrev = targetVis(chapters[ci-1], g);
+    if (vPrev !== vCur){
+      const t = smoothstep((p - (c.r[0] - PAD)) / (2*PAD));
+      return lerp(vPrev, vCur, t);
+    }
+  }
+  // ramp across the RIGHT boundary (this chapter -> next one)
+  if (ci < chapters.length-1 && p > c.r[1] - PAD){
+    const vNext = targetVis(chapters[ci+1], g);
+    if (vNext !== vCur){
+      const t = smoothstep((p - (c.r[1] - PAD)) / (2*PAD));
+      return lerp(vCur, vNext, t);
+    }
+  }
+  return vCur;
+}
+
+// ---------- deterministic scroll resolver ----------
+// A single (damped) scroll position drives camera, opacity and title together so
+// the fade is locked to the camera move — the Apple-style "focus" feel.
+function resolve(p) {
+  if (!chapters.length) return;
+
+  let i = chapters.findIndex(c => p <= c.r[1]);
+  if (i < 0) i = chapters.length - 1;
+  const c = chapters[i], prev = i > 0 ? chapters[i-1] : c;
+  const localT = THREE.MathUtils.clamp((p - c.r[0]) / (c.r[1] - c.r[0]), 0, 1);
+  const e = ease(localT);
+
+  // camera
+  camFor(boxes[prev.box], A); camFor(boxes[c.box], B);
+  camera.position.lerpVectors(A.pos, B.pos, e);
+  camTarget.lerpVectors(A.target, B.target, e);
+  camera.lookAt(camTarget);
+
+  // opacity (trapezoid hold + boundary ramps)
+  for (const m of meshes) setOpacity(m, computeOpacityForGroup(m.userData.group, p));
+
+  // title fade
+  h1.innerHTML = c.title; psub.textContent = c.sub;
+  const fin = Math.min(localT / 0.2, 1), fout = Math.min((1 - localT) / 0.2, 1);
+  titleEl.style.opacity = String(i === 0 ? fout : Math.min(fin, fout));
+
+  document.getElementById('hud-progress').textContent = Math.round(p * 100) + '%';
+}
+
+// ---------- scroll input (lightly damped for inertia) ----------
+addEventListener('scroll', () => {
+  const max = document.body.scrollHeight - innerHeight;
+  progress = max > 0 ? Math.min(Math.max(scrollY/max, 0), 1) : 0;
+}, { passive: true });
+
+// ---------- grouping editor ----------
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const pickedEl = document.getElementById('picked');
+
+function applyEditColors(on) {
+  for (const m of meshes) {
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    mats.forEach((mt, k) => {
+      if (!mt.color) return;
+      if (on) mt.color.setHex(GROUP_COLORS[m.userData.group] || GROUP_COLORS.other);
+      else if (m.userData.baseColors[k]) mt.color.copy(m.userData.baseColors[k]);
+    });
+    setOpacity(m, 1);
+  }
+}
+function enterEdit() {
+  editMode = true; document.body.classList.add('editing');
+  controls.enabled = true;
+  controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
+  camFor(boxes.all, A); camera.position.copy(A.pos); camera.lookAt(controls.target);
+  applyEditColors(true);
+}
+function exitEdit() {
+  editMode = false; document.body.classList.remove('editing');
+  controls.enabled = false;
+  applyEditColors(false);
+  resolve(progress);
+}
+
+addEventListener('keydown', (ev) => {
+  const k = ev.key.toLowerCase();
+  if (k === 'g') editMode ? exitEdit() : enterEdit();
+  if (k === 'e' && editMode) exportJSON();
+});
+renderer.domElement.addEventListener('click', (ev) => {
+  if (!editMode) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((ev.clientX-r.left)/r.width)*2-1;
+  pointer.y = -((ev.clientY-r.top)/r.height)*2+1;
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObjects(meshes, false)[0];
+  if (!hit) return;
+  const m = hit.object;
+  const next = CYCLE[(CYCLE.indexOf(m.userData.group)+1) % CYCLE.length];
+  // move every instance sharing this geometry OR this name, so duplicates and
+  // same-named parts stay consistent (and the name->group export stays clean)
+  for (const o of meshes)
+    if (o.geometry.uuid === m.geometry.uuid || (m.name && o.name === m.name)) o.userData.group = next;
+  applyEditColors(true);
+  pickedEl.textContent = `${m.name || '(unnamed)'} → ${next}`;
+});
+function exportJSON() {
+  // only named parts; unnamed duplicates are handled automatically on load via
+  // geometry backfill. Output matches the groups.json file shape exactly.
+  const map = {};
+  for (const m of meshes) if (m.name) map[m.name] = m.userData.group;
+  const txt = JSON.stringify({ groups: map }, null, 2);
+  navigator.clipboard?.writeText(txt).catch(()=>{});
+  document.getElementById('dumpText').value = txt;
+  document.getElementById('dump').style.display = 'block';
+}
+document.getElementById('exportBtn').addEventListener('click', exportJSON);
+document.getElementById('dumpClose').addEventListener('click', () => document.getElementById('dump').style.display='none');
+
+// ---------- loop ----------
+function tick() {
+  requestAnimationFrame(tick);
+  if (editMode) { controls.update(); }
+  else {
+    // light damping for smooth inertia on camera + fades
+    shownProgress += (progress - shownProgress) * 0.12;
+    resolve(shownProgress);
+    }
+  updateHeadlights();          // keep the rig aimed down the current view axis
+  renderer.render(scene, camera);
+}
+tick();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BlindMaster — Aditya Pulipaka</title>
+<meta name="description" content="Full-stack IoT smart blinds — ESP32-C6 firmware, an Express + Socket.IO backend, and a Flutter app, with BLE-only provisioning and end-to-end calibration." />
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/project.css" />
+</head>
+<body>
+
+<nav id="nav">
+  <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navlinks">
+    <a href="../index.html#work">Work</a>
+    <a href="../index.html#about">About</a>
+    <a href="../index.html#contact">Contact</a>
+    <a class="btn" href="../assets/resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
+  </div>
+</nav>
+
+<header class="phero">
+  <div class="wrap">
+    <div class="grid">
+      <div>
+        <a class="back" href="../index.html#work">← Selected Work</a>
+        <span class="eyebrow">Full-stack IoT · Solo · Embedded</span>
+        <h1>BlindMaster</h1>
+        <p class="lede">Smart blinds you control, schedule, and calibrate <b>end-to-end</b> — a Flutter app
+          talks to an Express server over Socket.IO, which relays to ESP32-C6 hubs, with BLE-only
+          provisioning for the first handshake.</p>
+        <div class="tags">
+          <span class="tag">ESP32-C6 · ESP-IDF</span><span class="tag">FreeRTOS · NimBLE</span><span class="tag">Express · Socket.IO</span><span class="tag">Flutter</span><span class="tag">PostgreSQL · MongoDB</span>
+        </div>
+        <div class="actions">
+          <a class="btn" href="https://github.com/pulipakaa24/BlindMaster" target="_blank">GitHub ↗</a>
+        </div>
+      </div>
+      <div class="hero-media reveal">
+        <div class="abstract"><span class="mark">BlindMaster</span></div>
+        <span class="cap">Hub render coming</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <dl class="facts reveal">
+    <div><dt>Role</dt><dd>Solo · all 3 codebases</dd></div>
+    <div><dt>Timeline</dt><dd>Ongoing · pre-release</dd></div>
+    <div><dt>Context</dt><dd>Personal project</dd></div>
+    <div><dt>Stack</dt><dd>ESP-IDF · Express.js · Flutter</dd></div>
+  </dl>
+
+  <section class="block reveal">
+    <h2>Overview</h2>
+    <p>A Flutter app talks to an Express server over Socket.IO/HTTPS, which relays commands to ESP32-C6
+      hubs — also over Socket.IO — with BLE used only for the initial Wi-Fi + auth handshake. Blind
+      position is unified across all three codebases as an 11-step model (0–10, where 5 = fully open).</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>System architecture</h2>
+    <figure class="figure reveal">
+      <div style="padding:24px 18px; background:#0a0a0a">
+        <svg viewBox="0 0 820 400" role="img" aria-label="BlindMaster system architecture diagram" style="width:100%; height:auto; display:block">
+          <title>BlindMaster system architecture</title>
+          <desc>The Flutter app and ESP32-C6 hubs communicate only through the Express server over Socket.IO/HTTP with JWT and TLS. BLE links the phone directly to the device for one-time provisioning. The server persists to PostgreSQL and MongoDB and sends email via Mailgun.</desc>
+          <style>
+            .nd{fill:#101013;stroke:#ffffff2b;stroke-width:1.5}
+            .nd.acc{stroke:#ff6a00;stroke-width:1.6}
+            .lid{fill:#17171b;stroke:#ffffff2b;stroke-width:1.5;fill-opacity:1}
+            .t{fill:#fff;font-weight:700;font-size:15px}
+            .s{fill:#ffffff8c;font-size:10.5px}
+            .mono{font-family:ui-monospace,Menlo,Consolas,monospace;fill:#ff8a3a;font-size:10px}
+            .ln{stroke:#ffffff47;stroke-width:1.6;fill:none}
+            .lbl{fill:#ffffff8c;font-size:10px}
+            .lbl2{fill:#ffffff52;font-size:9.5px}
+            .ble{stroke:#ff6a00;stroke-width:1.6;fill:none;stroke-dasharray:5 5}
+            .blelbl{fill:#ff6a00;font-size:10.5px;font-weight:600}
+            svg text{text-anchor:middle;dominant-baseline:middle;font-family:"Helvetica Neue",Arial,sans-serif}
+          </style>
+          <defs>
+            <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6,3 L0,6 Z" fill="#ffffff99"/></marker>
+            <marker id="ahS" markerWidth="9" markerHeight="9" refX="0" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M6,0 L0,3 L6,6 Z" fill="#ffffff99"/></marker>
+            <marker id="bah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6,3 L0,6 Z" fill="#ff6a00"/></marker>
+            <marker id="bahS" markerWidth="9" markerHeight="9" refX="0" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M6,0 L0,3 L6,6 Z" fill="#ff6a00"/></marker>
+          </defs>
+
+          <!-- BLE provisioning arc (phone ↔ device directly, setup only) -->
+          <path class="ble" d="M120,92 C120,34 700,34 700,92" marker-start="url(#bahS)" marker-end="url(#bah)"/>
+          <text class="blelbl" x="410" y="26">BLE provisioning · setup only</text>
+
+          <!-- top-row data plane connectors -->
+          <line class="ln" x1="210" y1="129" x2="320" y2="129" marker-start="url(#ahS)" marker-end="url(#ah)"/>
+          <text class="lbl"  x="265" y="113">Socket.IO / HTTP</text>
+          <text class="lbl2" x="265" y="150">JWT · TLS</text>
+          <line class="ln" x1="500" y1="129" x2="610" y2="129" marker-start="url(#ahS)" marker-end="url(#ah)"/>
+          <text class="lbl"  x="555" y="113">Socket.IO / HTTP</text>
+          <text class="lbl2" x="555" y="150">JWT · TLS</text>
+
+          <!-- server → backing services bus -->
+          <path class="ln" d="M410,166 V224 M120,224 H700 M120,224 V300 M410,224 V300 M700,224 V300"/>
+
+          <!-- primary nodes -->
+          <rect class="nd"     x="30"  y="92" width="180" height="74" rx="13"/>
+          <text class="t"    x="120" y="122">Flutter App</text>
+          <text class="mono" x="120" y="143">blinds_flutter</text>
+
+          <rect class="nd acc" x="320" y="92" width="180" height="74" rx="13"/>
+          <text class="t"    x="410" y="122">Express Server</text>
+          <text class="mono" x="410" y="143">blinds_express</text>
+
+          <rect class="nd"     x="610" y="92" width="180" height="74" rx="13"/>
+          <text class="t"    x="700" y="122">XIAO ESP32-C6</text>
+          <text class="mono" x="700" y="143">Blinds_XIAO</text>
+
+          <!-- backing services: PostgreSQL & MongoDB as DB cylinders, SES as a service -->
+          <path class="nd"  d="M30,309 C30,300 210,300 210,309 L210,375 C210,384 30,384 30,375 Z"/>
+          <path class="lid" d="M30,309 C30,318 210,318 210,309"/>
+          <text class="t"  x="120" y="334" font-size="14">PostgreSQL</text>
+          <text class="s"  x="120" y="354">users · devices · peripherals</text>
+          <text class="s"  x="120" y="368">groups · tokens</text>
+
+          <path class="nd"  d="M320,309 C320,300 500,300 500,309 L500,375 C500,384 320,384 320,375 Z"/>
+          <path class="lid" d="M320,309 C320,318 500,318 500,309"/>
+          <text class="t"  x="410" y="338" font-size="14">MongoDB</text>
+          <text class="s"  x="410" y="358">Agenda jobs · schedules</text>
+
+          <rect class="nd" x="610" y="300" width="180" height="84" rx="13"/>
+          <text class="t"  x="700" y="334" font-size="14">Mailgun</text>
+          <text class="s"  x="700" y="356">verification ·</text>
+          <text class="s"  x="700" y="370">reset emails</text>
+        </svg>
+      </div>
+      <figcaption>Server-as-relay topology: the Flutter app and ESP32-C6 hubs talk only through the
+        Express server (Socket.IO/HTTP over TLS); BLE links the phone to the device for one-time
+        provisioning. Redrawn from the project's architecture diagram.</figcaption>
+    </figure>
+    <ul style="margin-top:22px">
+      <li><b>Server as relay</b> — all app↔device traffic routes through the server after provisioning.</li>
+      <li><b>Dual-path updates</b> — Socket.IO for real-time, HTTP polling as a fallback.</li>
+      <li><b>BLE-only provisioning</b> — the phone delivers Wi-Fi creds + initial JWT straight to the ESP32, never via the server.</li>
+      <li><b>One 11-position model</b> shared across HTTP, Socket.IO, and BLE keeps the firmware tiny and the UI legible.</li>
+    </ul>
+  </section>
+
+  <section class="block reveal">
+    <h2>Highlights</h2>
+    <div class="dives">
+      <div class="dive">
+        <h3>Calibration as a Socket.IO handshake</h3>
+        <p>A multi-stage exchange (<code>calib_start → stage1 → stage2 → calib_done</code>): the device
+          records "up" then "down" encoder ticks as the user moves the blind, and the tick→position
+          mapping is saved to NVS — the server is a pure relay.</p>
+      </div>
+      <div class="dive">
+        <h3>BLE for provisioning only</h3>
+        <p>Wi-Fi creds + JWT go over a custom NimBLE service; once provisioned, BLE goes dormant and all
+          real-time traffic switches to Socket.IO. Trade-off: LE Secure Connections without bonding,
+          assuming physical proximity at setup.</p>
+      </div>
+      <div class="dive">
+        <h3>Power management on the ESP32-C6</h3>
+        <p>Dynamic frequency scaling (80–160 MHz), light sleep when idle, GPIO-gated servo power, and a
+          MAX17048 fuel gauge for state-of-charge telemetry and a low-battery warning under 20%.</p>
+      </div>
+      <div class="dive">
+        <h3>Hardened backend</h3>
+        <p>Layered rate limits (HTTP, auth, WS connects/messages, email), JWT + Argon2 auth, and
+          boot-time cleanup of stale connections and expired tokens so restarts don't leave zombie devices.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block reveal">
+    <h2>Status</h2>
+    <ul>
+      <li>So close to having a demo! Will finalize when I get home from San Diego.</li>
+      <li>A <code>taskdrivenpowersave</code> branch (deeper power management) will replace main.</li>
+    </ul>
+  </section>
+
+  <div class="soon reveal">
+    A full write-up with hardware build photos and hub renders is coming.
+    <a href="mailto:adipu@utexas.edu">Reach out</a> for details.
+  </div>
+</div>
+
+<footer class="wrap">
+  <span>© <span id="yr"></span> Aditya Pulipaka</span>
+  <a href="../index.html">← Back to home</a>
+</footer>
+
+<script src="../assets/project.js"></script>
+</body>
+</html>

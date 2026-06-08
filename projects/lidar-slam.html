@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LiDAR SLAM & Localization — Aditya Pulipaka</title>
+<meta name="description" content="ROS2 package for offline SLAM, real-time map-based localization, and incremental mapping. Sub-5 cm accuracy. Built on KISS-ICP / KISS-SLAM for UT Dallas NOVA." />
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/project.css" />
+</head>
+<body>
+
+<nav id="nav">
+  <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navlinks">
+    <a href="../index.html#work">Work</a>
+    <a href="../index.html#about">About</a>
+    <a href="../index.html#contact">Contact</a>
+    <a class="btn" href="../assets/resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
+  </div>
+</nav>
+
+<header class="phero">
+  <div class="wrap">
+    <div class="grid">
+      <div>
+        <a class="back" href="../index.html#work">← Selected Work</a>
+        <span class="eyebrow">Robotics · Autonomy · Localization</span>
+        <h1>LiDAR SLAM<br>& Localization</h1>
+        <p class="lede">A ROS2 package that does offline SLAM, real-time <b>map-based localization</b>, and
+          incremental map addition from one stack — validated to <b>~5 cm</b> against GPS ground truth.</p>
+        <div class="tags">
+          <span class="tag">ROS2</span><span class="tag">C++ / PyBind</span><span class="tag">KISS-ICP</span><span class="tag">KISS-SLAM</span><span class="tag">Open3D</span><span class="tag">OpenCV ORB</span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-solid" href="https://youtu.be/qvsudqgiFFI" target="_blank" rel="noopener">Watch demo ↗</a>
+        </div>
+        <div class="statusline"><span class="dot"></span> Shipped · 3 ROS2 nodes</div>
+      </div>
+      <div class="hero-media reveal">
+        <div class="abstract"><span class="mark">Point Cloud</span></div>
+        <span class="cap">Map / point-cloud capture coming</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <dl class="facts reveal">
+    <div><dt>Role</dt><dd>Autonomous Driving SWE</dd></div>
+    <div><dt>Timeline</dt><dd>May – Aug 2025</dd></div>
+    <div><dt>Context</dt><dd>UT Dallas NOVA Team</dd></div>
+    <div><dt>Accuracy</dt><dd>Sub-5 cm vs GPS truth</dd></div>
+  </dl>
+
+  <section class="block reveal">
+    <h2>Overview</h2>
+    <p>I forked and extended KISS-ICP, KISS-SLAM, and Map-Closures so the same stack could do offline
+      SLAM, real-time localization against a pre-built static map, and additive mapping — all from a
+      single ROS2 package with three nodes (mapping, localization, map_addition).</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>The problem</h2>
+    <p>The NOVA team needed localization against a <i>pre-built static world map</i>, not just the dynamic
+      local maps the off-the-shelf KISS-* libraries produce. They also needed to start SLAM at a
+      non-origin keypose (so maps stitch cleanly to an existing global map) and close the loop against
+      that global map — not only against recent local scans.</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>Highlights</h2>
+    <div class="dives">
+      <div class="dive">
+        <h3>Loop closure against a global map</h3>
+        <p>Stock Map-Closures only matches recent local maps. I added a cv2.ORB detector whose params
+          scale with point-cloud max dimension, injected the global map into the HBST with a
+          <i>negative</i> ID, and branched KISS-SLAM to add a pose-graph edge straight to origin on a
+          negative-ID match.</p>
+      </div>
+      <div class="dive">
+        <h3>Non-origin SLAM start</h3>
+        <p>Overloaded KISS-SLAM init to accept an initial KeyPose from config, so maps centered elsewhere
+          in the world stitch cleanly onto the pre-existing global map.</p>
+      </div>
+      <div class="dive">
+        <h3>Static-map localization</h3>
+        <p>Overloaded KISS-ICP init and odometry to localize against a static world map rather than
+          rebuilding a dynamic local map every frame.</p>
+      </div>
+      <div class="dive">
+        <h3>ICP + features together</h3>
+        <p>Combining ICP with feature matching gave robust convergence and the sub-5 cm accuracy the
+          team needed on bag-replayed data.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block reveal">
+    <h2>Demo</h2>
+    <div class="videowrap">
+      <iframe src="https://www.youtube.com/embed/qvsudqgiFFI" title="LiDAR SLAM demo"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
+  </section>
+
+  <section class="block reveal">
+    <h2>Results</h2>
+    <ul>
+      <li>Sub-5 cm localization accuracy vs simulated GPS ground truth on ROS2 bag tests.</li>
+      <li>Single-command mapping, real-time localization, and incremental additive mapping nodes.</li>
+    </ul>
+  </section>
+
+  <div class="soon reveal">
+    A deeper write-up — architecture diagram and node breakdown — is on the way.
+    <a href="mailto:adipu@utexas.edu">Reach out</a> for details.
+  </div>
+</div>
+
+<footer class="wrap">
+  <span>© <span id="yr"></span> Aditya Pulipaka</span>
+  <a href="../index.html">← Back to home</a>
+</footer>
+
+<script src="../assets/project.js"></script>
+</body>
+</html>

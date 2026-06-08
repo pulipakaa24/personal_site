@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RescueVision — Aditya Pulipaka</title>
+<meta name="description" content="mmWave + UWB victim-location system that helps first responders find people through drywall, smoke, and fire. 1st place, Analog Devices Sensor Fusion @ StarkHacks." />
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/project.css" />
+</head>
+<body>
+
+<nav id="nav">
+  <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navlinks">
+    <a href="../index.html#work">Work</a>
+    <a href="../index.html#about">About</a>
+    <a href="../index.html#contact">Contact</a>
+    <a class="btn" href="../assets/resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
+  </div>
+</nav>
+
+<header class="phero">
+  <div class="wrap">
+    <div class="grid">
+      <div>
+        <a class="back" href="../index.html#work">← Selected Work</a>
+        <span class="eyebrow">Hardware · Sensor Fusion <span class="win">· 🏆 1st @ StarkHacks</span></span>
+        <h1>RescueVision</h1>
+        <p class="lede">An mmWave + UWB victim-location system that helps first responders find people
+          <b>through drywall, smoke, and fire</b> — and renders them in the responder's own AR frame.</p>
+        <div class="tags">
+          <span class="tag">TI IWR6843 mmWave</span><span class="tag">ESP32 + ESP-NN</span><span class="tag">Qorvo UWB</span><span class="tag">iOS · ARKit VIO</span><span class="tag">BLE</span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-solid" href="https://www.youtube.com/watch?v=SlMJJwz8QeA" target="_blank" rel="noopener">Watch demo ↗</a>
+          <a class="btn" href="https://youtu.be/WuoMCzevC1U" target="_blank" rel="noopener">Short cut ↗</a>
+        </div>
+        <div class="statusline"><span class="dot"></span> Functional prototype · full case study in progress</div>
+      </div>
+      <div class="hero-media reveal">
+        <div class="abstract"><span class="mark">RescueVision</span></div>
+        <span class="cap">Hero render / capture coming</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <dl class="facts reveal">
+    <div><dt>Role</dt><dd>Team of 4 · sensing + fusion</dd></div>
+    <div><dt>Timeline</dt><dd>Apr – May 2026</dd></div>
+    <div><dt>Context</dt><dd>StarkHacks @ Purdue · 1st place</dd></div>
+    <div><dt>Mentor</dt><dd>Cameron Villone (Analog Devices)</dd></div>
+  </dl>
+
+  <section class="block reveal">
+    <h2>Overview</h2>
+    <p>A wall-mounted hub sweeps a 60 GHz mmWave radar through 360° to locate people inside a building —
+      distinguishing active from stationary/unconscious — then publishes their positions to a responder's
+      phone. The phone fuses UWB ranging with ARKit visual-inertial odometry so each detection lands in
+      the responder's own frame of reference, even from far away with no line of sight.</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>The problem</h2>
+    <p>First responders entering an unfamiliar building have no good way to know where the people inside
+      are — especially if those people are stationary or unconscious and can't call out. A persistently
+      installed sensor hub plus a responder phone app can deliver that, cheaply, even through walls.</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>Highlights</h2>
+    <div class="dives">
+      <div class="dive">
+        <h3>Through-wall sensing</h3>
+        <p>A TI IWR6843AOPEVM running the Vital-Signs &amp; People-Tracking binary uses a 120° 60 GHz scan;
+          the onboard DSP identifies people by detected vitals and movement.</p>
+      </div>
+      <div class="dive">
+        <h3>360° hub control loop</h3>
+        <p>An ESP32 configures the radar over USB host, steps a stepper 90°→360° for full coverage with
+          overlap, and runs ESP-NN to classify tracks as active / unconscious / phantom.</p>
+      </div>
+      <div class="dive">
+        <h3>Frame-of-reference math</h3>
+        <p>Detections are transformed sensor → hub via SolidWorks-derived transforms + stepper angle, then
+          the app pairs UWB ranging with ARKit VIO (Gauss-Jordan) to place them in the responder's frame.</p>
+      </div>
+      <div class="dive">
+        <h3>Why sensor fusion</h3>
+        <p>No single sensor solves it: radar sees through walls but not absolute position; UWB + VIO give
+          the responder-relative geometry. Fusing them is what wins the "find the victim" problem.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block reveal">
+    <h2>Results</h2>
+    <ul>
+      <li>1st place — Analog Devices' Sensor Fusion track at StarkHacks @ Purdue (largest hardware hackathon at the time).</li>
+      <li>Through-wall victim localization rendered live in the responder's own AR frame.</li>
+      <li>Prize: Analog Devices computer-vision kit.</li>
+    </ul>
+  </section>
+
+  <section class="block reveal">
+    <h2>Demo</h2>
+    <div class="videowrap">
+      <iframe src="https://www.youtube.com/embed/SlMJJwz8QeA" title="RescueVision demo"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
+  </section>
+
+  <div class="soon reveal">
+    This is a condensed case study. A full write-up — architecture diagram, deeper decisions, and more
+    media — is on the way. Want the details now? <a href="mailto:adipu@utexas.edu">Reach out</a>.
+  </div>
+</div>
+
+<footer class="wrap">
+  <span>© <span id="yr"></span> Aditya Pulipaka</span>
+  <a href="../index.html">← Back to home</a>
+</footer>
+
+<script src="../assets/project.js"></script>
+</body>
+</html>

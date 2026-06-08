@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SmartPT — Aditya Pulipaka</title>
+<meta name="description" content="Camera + IMU joint-angle tracking for physical therapy, with real-time form feedback. 1st place, Healthcare Track @ Nexhacks (CMU). Live on TestFlight." />
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/project.css" />
+</head>
+<body>
+
+<nav id="nav">
+  <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navlinks">
+    <a href="../index.html#work">Work</a>
+    <a href="../index.html#about">About</a>
+    <a href="../index.html#contact">Contact</a>
+    <a class="btn" href="../assets/resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
+  </div>
+</nav>
+
+<header class="phero">
+  <div class="wrap">
+    <div class="grid">
+      <div>
+        <a class="back" href="../index.html#work">← Selected Work</a>
+        <span class="eyebrow">Mobile · Sensor Fusion <span class="win">· 🏆 1st @ Nexhacks</span></span>
+        <h1>SmartPT</h1>
+        <p class="lede">A physical-therapy app that turns a phone — plus an optional IMU — into a
+          <b>closed-loop progress tracker</b>, giving patients real-time form feedback and clinicians
+          richer movement data than a self-reported scale.</p>
+        <div class="tags">
+          <span class="tag">Flutter</span><span class="tag">ESP32 IMU · BLE 100 Hz</span><span class="tag">RTMPose3D</span><span class="tag">Extended Kalman Filter</span><span class="tag">Overshoot API</span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-solid" href="#" data-placeholder>TestFlight (beta)</a>
+          <a class="btn" href="#" data-placeholder>GitHub ↗</a>
+        </div>
+        <div class="statusline"><span class="dot"></span> Live on TestFlight · case study in progress</div>
+      </div>
+      <div class="hero-media reveal">
+        <div class="abstract"><span class="mark">SmartPT</span></div>
+        <span class="cap">App capture coming</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <dl class="facts reveal">
+    <div><dt>Role</dt><dd>Team of 3 · fusion + firmware</dd></div>
+    <div><dt>Timeline</dt><dd>Jan 2026 → ongoing</dd></div>
+    <div><dt>Context</dt><dd>Nexhacks @ CMU · 1st Healthcare</dd></div>
+    <div><dt>Scale</dt><dd>1500+ participants</dd></div>
+  </dl>
+
+  <section class="block reveal">
+    <h2>Overview</h2>
+    <p>Doctors configure a patient's exercises; patients record themselves and get real-time form
+      feedback plus long-term recovery insights. 3D keypoints from RTMPose3D fuse with an optional
+      ESP32 IMU over BLE through an Extended Kalman Filter that weights each camera update by detection
+      confidence. Won the Healthcare track at Nexhacks @ CMU and went live on TestFlight in Feb 2026.</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>The problem</h2>
+    <p>Patients doing at-home PT have no good way to see whether their joint flexion is actually
+      improving session-to-session, and clinicians want richer movement data than a self-reported
+      number. SmartPT closes that loop with hardware the patient already owns.</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>Highlights</h2>
+    <div class="dives">
+      <div class="dive">
+        <h3>Camera + IMU time-sync over BLE</h3>
+        <p>100 Hz IMU reads on the ESP32 batch into 30 Hz BLE notifies; a round-trip-time calibration
+          (app sends an ack, RTT/2 added to each timestamp) aligns the IMU stream to the video.</p>
+      </div>
+      <div class="dive">
+        <h3>EKF for joint-angle fusion</h3>
+        <p>State = [joint angle, IMU bias]. The IMU drives the angle at high rate; each CV estimate is a
+          corrective update weighted by detection confidence — high-confidence frames pin the bias.</p>
+      </div>
+      <div class="dive">
+        <h3>Dual video pipeline</h3>
+        <p>Frames stream to the Overshoot API for live activity classification while simultaneously
+          recording locally; on session end the full clip runs through RTMPose3D for the EKF.</p>
+      </div>
+      <div class="dive">
+        <h3>Hardware-optional by design</h3>
+        <p>The IMU sharpens accuracy but isn't required — the same EKF can fall back to a
+          constant-velocity model so the app still works phone-only.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block reveal">
+    <h2>Results</h2>
+    <ul>
+      <li>1st place — Healthcare track, Nexhacks @ CMU (1 of 4 main tracks).</li>
+      <li>In-session activity classification plus per-session and cross-session joint-angle progress.</li>
+      <li>Shipped to TestFlight (Feb 2026); development ongoing.</li>
+    </ul>
+  </section>
+
+  <div class="soon reveal">
+    This is a condensed case study. A full write-up — architecture diagram, EKF derivation, and app
+    captures — is on the way. Want the TestFlight build or details? <a href="mailto:adipu@utexas.edu">Reach out</a>.
+  </div>
+</div>
+
+<footer class="wrap">
+  <span>© <span id="yr"></span> Aditya Pulipaka</span>
+  <a href="../index.html">← Back to home</a>
+</footer>
+
+<script src="../assets/project.js"></script>
+</body>
+</html>

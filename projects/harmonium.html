@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Harmonium — Aditya Pulipaka</title>
+<meta name="description" content="Try-before-you-buy online instrument simulator — play piano or guitar with webcam hand tracking, take lessons, or jam over WebRTC. Most Risky Hack @ TVG Vibeathon." />
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/project.css" />
+</head>
+<body>
+
+<nav id="nav">
+  <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navlinks">
+    <a href="../index.html#work">Work</a>
+    <a href="../index.html#about">About</a>
+    <a href="../index.html#contact">Contact</a>
+    <a class="btn" href="../assets/resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
+  </div>
+</nav>
+
+<header class="phero">
+  <div class="wrap">
+    <div class="grid">
+      <div>
+        <a class="back" href="../index.html#work">← Selected Work</a>
+        <span class="eyebrow">Software · Web · Computer Vision <span class="win">· ★ Most Risky @ TVG</span></span>
+        <h1>Harmonium</h1>
+        <p class="lede">A browser app where you <b>play piano or guitar with your hands</b> via webcam
+          tracking, work through curated lessons, or jam with a friend over WebRTC — built in under 24
+          hours.</p>
+        <div class="tags">
+          <span class="tag">React · Vercel</span><span class="tag">Tone.js</span><span class="tag">Mediapipe</span><span class="tag">WebRTC</span>
+        </div>
+        <div class="actions">
+          <a class="btn btn-solid" href="https://tvg-vibeathon.vercel.app" target="_blank" rel="noopener">Live demo ↗</a>
+          <a class="btn" href="https://github.com/Rohan-Yelandur/TVGVibeathon" target="_blank" rel="noopener">GitHub ↗</a>
+          <a class="btn" href="https://youtu.be/mPMlWaZJMw0" target="_blank" rel="noopener">Watch demo ↗</a>
+        </div>
+        <div class="statusline"><span class="dot"></span> Shipped · live in the browser</div>
+      </div>
+      <div class="hero-media reveal">
+        <div class="abstract"><span class="mark">Harmonium</span></div>
+        <span class="cap">Try it live ↗</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <dl class="facts reveal">
+    <div><dt>Role</dt><dd>ECE · team of 3</dd></div>
+    <div><dt>Timeline</dt><dd>Oct 2025 · &lt;24 hrs</dd></div>
+    <div><dt>Context</dt><dd>TVG Vibeathon · Most Risky Hack</dd></div>
+    <div><dt>Status</dt><dd>Shipped &amp; live</dd></div>
+  </dl>
+
+  <section class="block reveal">
+    <h2>Overview</h2>
+    <p>Buying a physical instrument just to find out whether it suits you is expensive — and there's no
+      good free way to noodle around with one first. Harmonium is a friction-free way to try (and to
+      goof off with friends): free-play piano and guitar, curated piano lessons, and multiplayer jamming
+      over WebRTC, all in the browser.</p>
+  </section>
+
+  <section class="block reveal">
+    <h2>Highlights</h2>
+    <div class="dives">
+      <div class="dive">
+        <h3>Frequency interpolation for missing samples</h3>
+        <p>Only some note samples were available, so I used Tone.js frequency interpolation to synthesize
+          the in-between tones — a direct application of attack-release envelopes from my Linear Systems
+          &amp; Signals course.</p>
+      </div>
+      <div class="dive">
+        <h3>EMA filter on hand tracking</h3>
+        <p>Raw Mediapipe keypoints jittered and made the on-screen instrument feel unstable; an
+          exponential moving average on the landmarks smoothed control — another signal-processing payoff
+          from coursework.</p>
+      </div>
+      <div class="dive">
+        <h3>Multiplayer over WebRTC</h3>
+        <p>Peer-to-peer audio/data so two people can jam together in real time, no server in the hot path.</p>
+      </div>
+      <div class="dive">
+        <h3>Built in under a day</h3>
+        <p>Scoped aggressively to ship a genuinely playable instrument in &lt;24 h — the ambition is what
+          earned the "Most Risky Hack" prize.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block reveal">
+    <h2>Demo</h2>
+    <div class="videowrap">
+      <iframe src="https://www.youtube.com/embed/mPMlWaZJMw0" title="Harmonium demo"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
+  </section>
+
+  <section class="block reveal">
+    <h2>Results</h2>
+    <ul>
+      <li>"Most Risky Hack" winner at the TVG Vibeathon.</li>
+      <li>Free-play piano + guitar, curated piano lessons, and WebRTC multiplayer.</li>
+      <li>Honest limitation: lessons are only implemented for piano so far.</li>
+    </ul>
+  </section>
+
+  <div class="soon reveal">
+    A fuller write-up with architecture notes is coming. In the meantime the app is
+    <a href="https://tvg-vibeathon.vercel.app" target="_blank" rel="noopener">live to try</a>.
+  </div>
+</div>
+
+<footer class="wrap">
+  <span>© <span id="yr"></span> Aditya Pulipaka</span>
+  <a href="../index.html">← Back to home</a>
+</footer>
+
+<script src="../assets/project.js"></script>
+</body>
+</html>

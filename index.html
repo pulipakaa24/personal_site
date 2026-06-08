@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aditya Pulipaka — ECE @ UT Austin</title>
+<meta name="description" content="Aditya Pulipaka — ECE Honors @ UT Austin. Embedded systems, robotics, controls, and computer vision. Embedded SWE @ Qualcomm, prev Bell Flight." />
+<meta property="og:title" content="Aditya Pulipaka" />
+<meta property="og:description" content="ECE @ UT Austin · embedded · robotics · controls · computer vision" />
+<meta property="og:type" content="website" />
+<link rel="icon" href="assets/logo.png" />
+<style>
+  :root{
+    --bg:#000; --fg:#fff;
+    --muted:rgba(255,255,255,.55);
+    --faint:rgba(255,255,255,.32);
+    --line:rgba(255,255,255,.12);
+    --card:rgba(255,255,255,.035);
+    --card-hi:rgba(255,255,255,.06);
+    --accent:#ff6a00;          /* burnt orange — UT + the rig prototype */
+    --accent2:#19d3ff;
+    --maxw:1180px;
+    --ease:cubic-bezier(.22,.61,.36,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth; scroll-padding-top:84px; -webkit-text-size-adjust:100%}
+  body{
+    background:var(--bg); color:var(--fg);
+    font-family:"Helvetica Neue","Inter",-apple-system,BlinkMacSystemFont,Arial,sans-serif;
+    line-height:1.5; overflow-x:hidden; -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit; text-decoration:none}
+  ::selection{background:var(--accent); color:#000}
+  img{display:block; max-width:100%}
+
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 28px}
+  .eyebrow{
+    font-size:12px; letter-spacing:.34em; text-transform:uppercase; color:var(--faint);
+    display:inline-flex; align-items:center; gap:10px;
+  }
+  .eyebrow::before{content:""; width:26px; height:1px; background:var(--accent); display:inline-block}
+  .accent{color:var(--accent)}
+
+  /* ---------- nav ---------- */
+  nav{
+    position:fixed; top:0; left:0; right:0; z-index:50;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 28px; transition:background .35s var(--ease), backdrop-filter .35s, border-color .35s;
+    border-bottom:1px solid transparent;
+  }
+  nav.scrolled{ background:rgba(0,0,0,.6); backdrop-filter:blur(14px); border-bottom:1px solid var(--line) }
+  .brand{display:flex; align-items:center; gap:11px; font-weight:800; letter-spacing:.02em; font-size:15px}
+  .brand img{width:26px; height:26px; object-fit:contain}
+  .navlinks{display:flex; align-items:center; gap:30px; font-size:13px; letter-spacing:.04em}
+  .navlinks a{color:var(--muted); transition:color .2s}
+  .navlinks a:hover{color:var(--fg)}
+  .btn{
+    display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:700; letter-spacing:.03em;
+    padding:9px 16px; border-radius:999px; border:1px solid var(--line); transition:.22s var(--ease);
+  }
+  .btn:hover{border-color:var(--fg); transform:translateY(-1px)}
+  .btn-solid{background:var(--fg); color:#000; border-color:var(--fg)}
+  .btn-solid:hover{background:var(--accent); border-color:var(--accent); color:#000}
+  .navlinks .btn{color:var(--fg)}
+  .menu-toggle{display:none}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative; min-height:100svh; display:flex; align-items:center; overflow:hidden}
+  .glow{
+    position:absolute; width:760px; height:760px; border-radius:50%; pointer-events:none; z-index:0;
+    background:radial-gradient(circle, rgba(255,106,0,.22), rgba(255,106,0,0) 62%);
+    filter:blur(20px); left:0; top:0;
+    transform:translate(calc(50vw - 380px), calc(42svh - 380px)); will-change:transform;
+  }
+  .hero::after{ /* fine grid texture */
+    content:""; position:absolute; inset:0; z-index:0; opacity:.5;
+    background:
+      linear-gradient(to right, rgba(255,255,255,.04) 1px, transparent 1px) 0 0/64px 64px,
+      linear-gradient(to bottom, rgba(255,255,255,.04) 1px, transparent 1px) 0 0/64px 64px;
+    -webkit-mask-image:radial-gradient(circle at 50% 45%, #000, transparent 78%);
+            mask-image:radial-gradient(circle at 50% 45%, #000, transparent 78%);
+  }
+  .hero .wrap{position:relative; z-index:2; width:100%}
+  .hero h1{
+    font-weight:800; letter-spacing:-.03em; line-height:.86; text-transform:uppercase;
+    font-size:clamp(54px,12.5vw,190px); margin:18px 0 0;
+  }
+  .hero h1 .l2{color:transparent; -webkit-text-stroke:1.5px rgba(255,255,255,.85)}
+  .hero .lede{
+    margin-top:26px; max-width:620px; font-size:clamp(16px,1.9vw,21px); color:var(--muted); line-height:1.55;
+  }
+  .hero .lede b{color:var(--fg); font-weight:600}
+  .status{
+    display:inline-flex; align-items:center; gap:10px; margin-top:30px;
+    font-size:13px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:7px 15px;
+  }
+  .dot{width:8px; height:8px; border-radius:50%; background:#39ff88; box-shadow:0 0 0 0 rgba(57,255,136,.6); animation:pulse 2.2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(57,255,136,.5)}70%{box-shadow:0 0 0 9px rgba(57,255,136,0)}100%{box-shadow:0 0 0 0 rgba(57,255,136,0)}}
+  .hero .cta{display:flex; gap:14px; margin-top:34px; flex-wrap:wrap}
+  .hero .btn{padding:13px 22px; font-size:14px}
+  .scrollcue{
+    position:absolute; bottom:26px; left:50%; transform:translateX(-50%); z-index:2;
+    font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:var(--faint);
+    display:flex; flex-direction:column; align-items:center; gap:9px;
+  }
+  .scrollcue .bar{width:1px; height:34px; background:linear-gradient(var(--faint),transparent); animation:drop 1.8s var(--ease) infinite}
+  @keyframes drop{0%{transform:scaleY(.2);transform-origin:top;opacity:0}40%{opacity:1}100%{transform:scaleY(1);transform-origin:top;opacity:0}}
+
+  /* ---------- marquee divider ---------- */
+  .marquee{border-block:1px solid var(--line); padding:20px 0; overflow:hidden; white-space:nowrap; -webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+  .marquee .track{display:inline-flex; gap:46px; animation:scrollx 32s linear infinite; will-change:transform}
+  .marquee span{font-size:clamp(15px,2.1vw,24px); font-weight:700; letter-spacing:-.01em; color:var(--faint); text-transform:uppercase}
+  .marquee span::after{content:"◦"; margin-left:46px; color:var(--accent)}
+  @keyframes scrollx{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  /* ---------- section scaffolding ---------- */
+  section{position:relative; padding:clamp(72px,11vw,140px) 0}
+  .sec-head{display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:54px; flex-wrap:wrap}
+  .sec-head h2{font-size:clamp(30px,5.2vw,62px); font-weight:800; letter-spacing:-.03em; line-height:1; text-transform:uppercase}
+  .sec-head p{color:var(--muted); max-width:420px; font-size:15px}
+  .idx{font-size:12px; letter-spacing:.3em; color:var(--faint); margin-bottom:14px}
+
+  /* ---------- about ---------- */
+  .about-grid{display:grid; grid-template-columns:300px 1fr; gap:56px; align-items:start}
+  .photo-frame{position:relative}
+  .photo-frame img{width:100%; border-radius:14px; filter:grayscale(1) contrast(1.05); transition:filter .5s var(--ease)}
+  .photo-frame:hover img{filter:grayscale(0) contrast(1)}
+  .photo-frame::before{content:""; position:absolute; inset:-1px; border-radius:15px; padding:1px; background:linear-gradient(160deg,var(--accent),transparent 55%); -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none}
+  .photo-frame{cursor:pointer}
+  .photo-hint{position:absolute; bottom:10px; right:10px; z-index:2; display:inline-flex; align-items:center; gap:6px;
+    font-size:11px; letter-spacing:.04em; color:#fff; background:rgba(0,0,0,.55); border:1px solid var(--line);
+    border-radius:999px; padding:6px 11px; opacity:0; transform:translateY(4px); transition:.25s var(--ease);
+    pointer-events:none; backdrop-filter:blur(4px)}
+  .photo-frame:hover .photo-hint, .photo-frame:focus-visible .photo-hint{opacity:1; transform:none}
+  /* ---------- profile photo lightbox ---------- */
+  .lightbox{position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; padding:24px;
+    background:rgba(0,0,0,.82); backdrop-filter:blur(8px); opacity:0; pointer-events:none; transition:opacity .25s var(--ease)}
+  .lightbox.open{opacity:1; pointer-events:auto}
+  .lb-card{position:relative; max-width:430px; width:100%; background:#0c0c0c; border:1px solid var(--line);
+    border-radius:16px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.6);
+    transform:scale(.94); transition:transform .3s var(--ease)}
+  .lightbox.open .lb-card{transform:none}
+  .lb-head{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid var(--line)}
+  .lb-title{font-size:14px; font-weight:700; letter-spacing:-.01em; color:#fff}
+  .lb-close{flex:none; width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:transparent;
+    color:var(--muted); cursor:pointer; font-size:13px; transition:.2s; display:flex; align-items:center; justify-content:center}
+  .lb-close:hover{border-color:var(--accent); color:var(--accent)}
+  .lb-card img{width:100%; display:block; filter:none}
+  .about-body p{font-size:clamp(16px,2vw,19px); color:rgba(255,255,255,.8); margin-bottom:18px; max-width:62ch}
+  .about-body p b{color:#fff; font-weight:600}
+  .facts{display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-top:30px}
+  .facts div{background:#000; padding:18px 20px}
+  .facts dt{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--faint); margin-bottom:6px}
+  .facts dd{font-size:14.5px; color:#fff; font-weight:500}
+
+  /* ---------- work ---------- */
+  .work-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:20px}
+  .card{
+    position:relative; border:1px solid var(--line); border-radius:16px; background:var(--card);
+    padding:26px 26px 24px; min-height:230px; display:flex; flex-direction:column;
+    transition:.3s var(--ease); overflow:hidden;
+  }
+  .card::after{content:""; position:absolute; inset:0; border-radius:16px; background:radial-gradient(420px circle at var(--mx,50%) var(--my,0%), rgba(255,106,0,.10), transparent 60%); opacity:0; transition:opacity .3s}
+  .card:hover{border-color:rgba(255,255,255,.28); background:var(--card-hi); transform:translateY(-3px)}
+  .card:hover::after{opacity:1}
+  .card .top{display:flex; align-items:flex-start; justify-content:space-between; gap:14px; position:relative; z-index:1}
+  .card h3{font-size:23px; font-weight:700; letter-spacing:-.01em}
+  .card .sub{color:var(--muted); margin-top:10px; font-size:14.5px; line-height:1.55; position:relative; z-index:1; flex:1}
+  .badge{font-size:11px; letter-spacing:.05em; font-weight:700; padding:5px 10px; border-radius:999px; white-space:nowrap}
+  .badge.win{background:rgba(255,106,0,.16); color:var(--accent); border:1px solid rgba(255,106,0,.4)}
+  .badge.live{background:rgba(25,211,255,.14); color:var(--accent2); border:1px solid rgba(25,211,255,.4)}
+  .badge.soon{background:transparent; color:var(--faint); border:1px solid var(--line)}
+  .tags{display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; position:relative; z-index:1}
+  .tag{font-size:11.5px; letter-spacing:.03em; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:4px 9px}
+  .card .go{position:relative; z-index:1; margin-top:18px; font-size:13px; color:var(--faint); display:inline-flex; align-items:center; gap:7px; transition:.2s}
+  .card:hover .go{color:#fff; gap:11px}
+  .card.feat{grid-column:1 / -1; min-height:auto; flex-direction:row; align-items:center; gap:34px; padding:0; background:linear-gradient(110deg, rgba(255,106,0,.07), transparent 60%)}
+  .card.feat .ph{flex:0 0 46%; aspect-ratio:16/10; border-radius:16px 0 0 16px; background:
+      radial-gradient(120% 120% at 70% 20%, rgba(255,106,0,.25), transparent 55%),
+      repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 2px, transparent 2px 12px), #0b0b0b;
+      display:flex; align-items:center; justify-content:center; position:relative}
+  .card.feat .ph small{position:absolute; bottom:12px; left:16px; color:var(--faint); font-size:11px; letter-spacing:.2em; text-transform:uppercase}
+  .card.feat .ph .mark{font-size:13px; letter-spacing:.3em; color:var(--accent2); text-transform:uppercase; border:1px solid rgba(25,211,255,.4); padding:9px 16px; border-radius:999px}
+  .card.feat .meat{padding:34px 38px 34px 0; flex:1}
+
+  /* ---------- timeline ---------- */
+  .timeline{position:relative; margin-left:6px}
+  .timeline::before{content:""; position:absolute; left:7px; top:6px; bottom:6px; width:1px; background:var(--line)}
+  .tl{position:relative; padding:0 0 38px 40px}
+  .tl::before{content:""; position:absolute; left:0; top:5px; width:15px; height:15px; border-radius:50%; background:#000; border:2px solid var(--faint); transition:.3s}
+  .tl.now::before{border-color:var(--accent); background:var(--accent); box-shadow:0 0 0 4px rgba(255,106,0,.18)}
+  .tl .when{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint)}
+  .tl h4{font-size:19px; font-weight:700; margin-top:6px}
+  .tl .org{color:var(--accent); font-weight:600}
+  .tl p{color:var(--muted); font-size:14.5px; margin-top:7px; max-width:64ch}
+  .quote{margin:38px 0 0 40px; border-left:2px solid var(--accent); padding:14px 0 14px 22px; max-width:70ch}
+  .quote p{font-size:clamp(16px,2.1vw,20px); color:#fff; font-style:italic; line-height:1.5}
+  .quote cite{display:block; margin-top:12px; font-style:normal; font-size:13px; color:var(--muted)}
+
+  /* ---------- honors ---------- */
+  .honors{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+  .honor{display:block; border:1px solid var(--line); border-radius:14px; padding:22px; background:var(--card); transition:.25s var(--ease)}
+  .honor:hover{border-color:rgba(255,106,0,.5); transform:translateY(-3px)}
+  .honor .h-top{font-size:24px; font-weight:800; color:var(--accent)}
+  .honor h5{font-size:16px; font-weight:700; margin-top:10px}
+  .honor span{display:block; color:var(--muted); font-size:13px; margin-top:6px}
+  /* test scores — deliberately lighter than the award cards (supplementary) */
+  .testscores{display:flex; align-items:center; gap:26px; flex-wrap:wrap; margin-top:16px; padding:16px 22px; border:1px solid var(--line); border-radius:14px; background:var(--card)}
+  .testscores .ts-label{font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint)}
+  .testscores .ts-items{display:flex; gap:34px; flex-wrap:wrap}
+  .testscores .ts-items div{font-size:14px; color:var(--muted); letter-spacing:.02em}
+  .testscores .ts-items b{font-size:22px; font-weight:800; color:#fff; margin-right:1px}
+  .testscores .ts-items i{font-style:normal; color:var(--faint)}
+  /* ---------- coursework ---------- */
+  .coursegroups{display:grid; grid-template-columns:repeat(2,1fr); gap:28px 48px}
+  .coursegroups h6{font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin-bottom:8px}
+  .course{display:flex; gap:14px; align-items:baseline; padding:10px 0; border-top:1px solid var(--line)}
+  .course .code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:var(--faint); min-width:78px; letter-spacing:.02em}
+  .course .name{font-size:14.5px; color:rgba(255,255,255,.82)}
+  .course-note{margin-top:34px; padding-top:18px; border-top:1px solid var(--line); font-size:13px; color:var(--faint); max-width:80ch}
+
+  /* ---------- skills ---------- */
+  .skillgroups{display:grid; grid-template-columns:repeat(2,1fr); gap:30px 56px}
+  .skillgroups h6{font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); margin-bottom:14px}
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .chip{font-size:13px; color:rgba(255,255,255,.78); border:1px solid var(--line); border-radius:7px; padding:6px 11px; transition:.2s; cursor:pointer; user-select:none}
+  .chip:hover{border-color:var(--fg); color:#fff}
+  .chip.active{border-color:var(--accent); color:var(--accent); background:rgba(255,106,0,.08)}
+  /* ---------- skill detail popover ---------- */
+  .skillpane{position:absolute; z-index:60; width:290px; max-width:calc(100vw - 32px);
+    background:#0c0c0c; border:1px solid var(--line); border-radius:14px; padding:16px 16px 14px;
+    box-shadow:0 24px 60px rgba(0,0,0,.65); opacity:0; transform:translateY(6px); pointer-events:none;
+    transition:opacity .18s var(--ease), transform .18s var(--ease)}
+  .skillpane.open{opacity:1; transform:none; pointer-events:auto}
+  .skillpane h4{font-size:15px; font-weight:800; letter-spacing:-.01em}
+  .skillpane .sp-group{margin-top:13px}
+  .skillpane .sp-label{font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin-bottom:8px}
+  .skillpane a.sp-proj{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px;
+    color:#fff; padding:7px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; transition:.18s}
+  .skillpane a.sp-proj:hover{border-color:var(--accent); color:var(--accent); transform:translateX(2px)}
+  .skillpane a.sp-proj span{color:var(--faint)}
+  .skillpane a.sp-proj:hover span{color:var(--accent)}
+  .skillpane .sp-course{font-size:12.5px; color:var(--muted); padding:3px 0; display:flex; gap:8px}
+  .skillpane .sp-course b{color:#fff; font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-weight:600; font-size:11px; min-width:62px}
+  .skillpane .sp-empty{font-size:12.5px; color:var(--faint); line-height:1.5}
+
+  /* ---------- contact ---------- */
+  .contact{text-align:center; border-top:1px solid var(--line)}
+  .contact h2{font-size:clamp(38px,8vw,108px); font-weight:800; letter-spacing:-.03em; line-height:.95; text-transform:uppercase}
+  .contact .mail{display:inline-block; margin-top:26px; font-size:clamp(18px,3vw,30px); color:var(--accent); border-bottom:1px solid transparent; transition:.2s}
+  .contact .mail:hover{border-color:var(--accent)}
+  .socials{display:flex; gap:14px; justify-content:center; margin-top:40px; flex-wrap:wrap}
+  footer{border-top:1px solid var(--line); padding:30px 0; color:var(--faint); font-size:13px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px}
+
+  /* ---------- reveal ---------- */
+  .reveal{opacity:0; transform:translateY(26px); transition:opacity .7s var(--ease), transform .7s var(--ease)}
+  .reveal.in{opacity:1; transform:none}
+  .reveal.d1{transition-delay:.08s}.reveal.d2{transition-delay:.16s}.reveal.d3{transition-delay:.24s}
+
+  @media (max-width:860px){
+    .navlinks a:not(.btn){display:none}
+    .about-grid{grid-template-columns:1fr; gap:34px}
+    .photo-frame{max-width:240px}
+    .work-grid,.honors,.skillgroups,.facts{grid-template-columns:1fr}
+    .honors{grid-template-columns:1fr 1fr}
+    .card.feat{flex-direction:column; align-items:stretch}
+    .card.feat .ph{flex-basis:auto; border-radius:16px 16px 0 0; aspect-ratio:16/9}
+    .card.feat .meat{padding:26px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important}
+    .reveal{opacity:1; transform:none; transition:none}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<!-- ---------- NAV ---------- -->
+<nav id="nav">
+  <a class="brand" href="#top"><img src="assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navlinks">
+    <a href="#work">Work</a>
+    <a href="#experience">Experience</a>
+    <a href="#about">About</a>
+    <a href="#contact">Contact</a>
+    <a class="btn" href="assets/resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
+  </div>
+</nav>
+
+<!-- ---------- HERO ---------- -->
+<header class="hero" id="top">
+  <div class="glow" id="glow"></div>
+  <div class="wrap">
+    <span class="eyebrow">ECE Honors · UT Austin</span>
+    <h1>Aditya<br><span class="l2">Pulipaka</span></h1>
+    <p class="lede">I build at the seam of <b>hardware and software</b> — embedded systems, robotics,
+      controls, and computer vision. From flight-control software to a levitating maglev rig
+      to award-winning sensor-fusion hacks.</p>
+    <div class="status"><span class="dot"></span> Currently: Embedded SWE Intern @ <b>&nbsp;Qualcomm</b>&nbsp;· Lev Subteam Lead @ Guadaloop</div>
+    <div class="cta">
+      <a class="btn btn-solid" href="#work">View Work →</a>
+      <a class="btn" href="assets/resume.pdf" target="_blank" rel="noopener">Résumé</a>
+      <a class="btn" href="mailto:adipu@utexas.edu">Get in touch</a>
+    </div>
+  </div>
+  <div class="scrollcue"><span class="bar"></span>Scroll</div>
+</header>
+
+<!-- ---------- MARQUEE ---------- -->
+<div class="marquee" aria-hidden="true">
+  <div class="track">
+    <span>Embedded</span><span>Robotics</span><span>Controls</span><span>Computer Vision</span><span>Sensor Fusion</span><span>SLAM</span><span>ROS</span>
+    <span>Embedded</span><span>Robotics</span><span>Controls</span><span>Computer Vision</span><span>Sensor Fusion</span><span>SLAM</span>d<span>ROS</span>
+  </div>
+</div>
+
+<!-- ---------- ABOUT ---------- -->
+<section id="about">
+  <div class="wrap">
+    <div class="about-grid">
+      <div class="photo-frame reveal">
+        <img src="assets/profile.jpg" alt="Aditya Pulipaka" loading="lazy"/>
+        <span class="photo-hint">⤢ Closer look</span>
+      </div>
+      <div class="about-body reveal d1">
+        <div class="idx">01 — About</div>
+        <p>I'm an <b>ECE Honors undergraduate at UT Austin</b> who likes problems
+          that don't fit neatly into "hardware" or "software." I've shipped flight-control, maintenance, and testing software at
+          <b>Bell Flight</b>, written OS-level drivers at <b>Qualcomm</b>, built a LiDAR SLAM
+          localization stack with the <b>UT Dallas NOVA team</b>, and architected prototyping, testing, and control solutions at <b>Texas Guadaloop</b>.</p>
+        <p>My happy place is closing the loop — sensors in, control out — whether that's a maglev yoke
+          holding a gap height, a robot localizing in a crowded atrium, or an mmWave radar finding a
+          person through a wall. I care about systems that are <b>fast, robust, and honest about their
+          limits.</b></p>
+        <dl class="facts">
+          <div><dt>Based in</dt><dd>Austin, Texas</dd></div>
+          <div><dt>Focus</dt><dd>Embedded · Robotics · Controls</dd></div>
+          <div><dt>Education</dt><dd>BS ECE Honors, UT Austin '28</dd></div>
+          <div><dt>Languages</dt><dd>English · Telugu · Spanish</dd></div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- WORK ---------- -->
+<section id="work">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="idx">02 — Selected Work</div>
+        <h2>Things I've<br>built</h2>
+      </div>
+      <p>A mix of research, internships, and hackathon wins. Case-study pages are in progress — the
+        Guadaloop rig already has a live 3D walkthrough.</p>
+    </div>
+
+    <div class="work-grid">
+
+      <!-- FEATURED: live 3D rig -->
+      <a class="card feat reveal" href="site_prototype/index.html">
+        <div class="ph"><span class="mark">Live 3D ↗</span><small>Scroll-driven WebGL viewer</small></div>
+        <div class="meat">
+          <div class="top">
+            <h3>Guadaloop Levitation Test Rig</h3>
+            <span class="badge live">Live 3D</span>
+          </div>
+          <p class="sub">An electromagnetic maglev test rig I lead development on — yoke, coils, gap-height
+            sensors, and slide rails. Built the control stack from hand-tuned PID up toward a
+            reinforcement-learning pipeline for the HEMS system. Explore the assembly in an
+            Apple-style scroll-driven 3D walkthrough.</p>
+          <div class="tags"><span class="tag">Controls</span><span class="tag">Embedded</span><span class="tag">CAD / WebGL</span><span class="tag">Reinforcement Learning</span></div>
+          <span class="go">Open the 3D walkthrough →</span>
+        </div>
+      </a>
+
+      <!-- RescueVision -->
+      <a class="card reveal" href="projects/rescuevision.html">
+        <div class="top"><h3>RescueVision</h3><span class="badge win">🏆 1st · StarkHacks</span></div>
+        <p class="sub">An mmWave + UWB system that locates victims through walls and renders them in a
+          first responder's own AR frame. Won Analog Devices' Sensor Fusion track at Purdue's StarkHacks.</p>
+        <div class="tags"><span class="tag">mmWave Radar</span><span class="tag">Sensor Fusion</span><span class="tag">Embedded</span></div>
+        <span class="go">Read case study →</span>
+      </a>
+
+      <!-- SmartPT -->
+      <a class="card reveal d1" href="projects/smartpt.html">
+        <div class="top"><h3>SmartPT</h3><span class="badge win">🏆 1st · Nexhacks</span></div>
+        <p class="sub">A PT app fusing camera 3D pose with an optional ESP32 IMU via an EKF for real-time
+          form feedback. Won the Healthcare track at CMU's Nexhacks; live on TestFlight.</p>
+        <div class="tags"><span class="tag">Flutter</span><span class="tag">EKF</span><span class="tag">Sensor Fusion</span></div>
+        <span class="go">Read case study →</span>
+      </a>
+
+      <!-- LiDAR SLAM -->
+      <a class="card reveal" href="projects/lidar-slam.html">
+        <div class="top"><h3>LiDAR SLAM & Localization</h3></div>
+        <p class="sub">A LiDAR SLAM + map-based localization pipeline for UT Dallas NOVA's autonomous
+          vehicle, built on KISS-ICP / Open3D. Fused ICP with feature matching for sub-5 cm accuracy in CARLA.</p>
+        <div class="tags"><span class="tag">ROS2</span><span class="tag">C++ / PyBind</span><span class="tag">SLAM</span></div>
+        <span class="go">Read case study →</span>
+      </a>
+
+      <!-- TweinStein -->
+      <a class="card reveal d1" href="projects/tweinstein.html">
+        <div class="top"><h3>TweinStein</h3><span class="badge win">🏆 1st · ECE445M Final Race</span></div>
+        <p class="sub">An autonomous racer on a custom RTOS — PD wall-following, an RL residual, and a
+          heuristic overtaking state machine. Won the ECE445M final race.</p>
+        <div class="tags"><span class="tag">RTOS</span><span class="tag">Robotics</span><span class="tag">Controls</span></div>
+        <span class="go">Read case study →</span>
+      </a>
+
+      <!-- BlindMaster -->
+      <a class="card reveal" href="projects/blindmaster.html">
+        <div class="top"><h3>BlindMaster</h3></div>
+        <p class="sub">Full-stack IoT smart blinds — ESP32-C6 firmware, an Express + Socket.IO backend, and
+          a Flutter app, with BLE-only provisioning and end-to-end calibration. Solo.</p>
+        <div class="tags"><span class="tag">ESP32-C6</span><span class="tag">Embedded</span><span class="tag">Full-stack</span></div>
+        <span class="go">Read case study →</span>
+      </a>
+
+      <!-- Harmonium -->
+      <a class="card reveal d1" href="projects/harmonium.html">
+        <div class="top"><h3>Harmonium</h3><span class="badge win">Most Risky · TVG</span></div>
+        <p class="sub">A browser-based instrument simulator with hand tracking so you can see and hear
+          yourself play before buying. "Most Risky Hack" at the TVG Vibeathon.</p>
+        <div class="tags"><span class="tag">Web</span><span class="tag">Computer Vision</span><span class="tag">Audio</span></div>
+        <span class="go">Read case study →</span>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<!-- ---------- EXPERIENCE ---------- -->
+<section id="experience">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="idx">03 — Experience</div>
+        <h2>Where I've<br>worked</h2>
+      </div>
+      <p>Embedded software, robotics research, and controls — across industry, university labs, and
+        student engineering teams.</p>
+    </div>
+
+    <div class="timeline">
+      <div class="tl now reveal">
+        <div class="when">May 2026 — Present · San Diego, CA</div>
+        <h4>Embedded Software Engineer Intern · <span class="org">Qualcomm</span></h4>
+        <p>Windows on Snapdragon. Extending device drivers to handle multiple clients and building a
+          testing framework for a laptop hinge sensor — driver/OS-level work.</p>
+      </div>
+      <div class="tl now reveal">
+        <div class="when">Jan 2026 — Present · Austin, TX</div>
+        <h4>Undergraduate Researcher · <span class="org">UT Austin AMRL</span></h4>
+        <p>ROS system using the Spinnaker SDK to pull frames from networked FLIR Blackfly S cameras,
+          fuse multiple views, and output global pose estimates for people and robots — toward a
+          markerless multi-camera calibration pipeline.</p>
+      </div>
+      <div class="tl now reveal">
+        <div class="when">Dec 2025 — Present · Austin, TX</div>
+        <h4>EM Levitation Subteam Lead · <span class="org">Texas Guadaloop</span></h4>
+        <p>Leading control-algorithm development and a reinforcement-learning pipeline for the HEMS
+          levitation system.</p>
+      </div>
+      <div class="tl reveal">
+        <div class="when">Jun 2025 — Aug 2025 · Arlington, TX</div>
+        <h4>Embedded SWE Intern, 525 Flight Control Systems · <span class="org">Bell Flight</span></h4>
+        <p>Resolved 5+ software problem reports across FCS code and low-level tests; built a Python tool
+          that migrated ~1000 high-level tests and comms databases between environments, saving an
+          estimated 6–12 months of manual work.</p>
+      </div>
+      <div class="tl reveal">
+        <div class="when">May 2025 — Aug 2025 · Dallas, TX</div>
+        <h4>Autonomous Driving SWE · <span class="org">UT Dallas NOVA</span></h4>
+        <p>Built the LiDAR SLAM + map-based localization stack (Open3D / KISS-ICP), reaching sub-5 cm
+          localization accuracy via combined ICP and feature matching.</p>
+      </div>
+      <div class="tl reveal">
+        <div class="when">Sep 2024 — May 2025 · Austin, TX</div>
+        <h4>Software Team · <span class="org">Stampede — UT Austin RoboMaster</span></h4>
+        <p>Monocular localization pipeline for the Sentry robot using OpenCV SolvePnP; tested odometry
+          methods for tighter positioning.</p>
+      </div>
+      <div class="tl reveal">
+        <div class="when">2023 — Earlier</div>
+        <h4>Earlier: <span class="org">Articulate Labs</span> · <span class="org">UT Southwestern (Takahashi Lab)</span> · <span class="org">Motorheads Robotics</span></h4>
+        <p>Product-dev intern on the KneeStim rehab device; circadian-rhythm biochemistry research; and
+          co-captain of a state-championship-debut FTC robotics team.</p>
+      </div>
+    </div>
+
+    <blockquote class="quote reveal">
+      <p>"Aditya is a pleasure to work with and has excellent engineering skills… he developed full
+        software-lifecycle solutions for our flight control computer software, exhibited agile thinking,
+        and took initiative to suggest and implement additional improvements."</p>
+      <cite>— Steve Feenstra, Flight Controls Software Lead / Staff Software Engineer, Bell Flight</cite>
+    </blockquote>
+  </div>
+</section>
+
+<!-- ---------- HONORS ---------- -->
+<section id="honors">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="idx">04 — Honors</div>
+        <h2>Recognition</h2>
+      </div>
+    </div>
+    <div class="honors">
+      <a class="honor reveal" href="projects/tweinstein.html"><div class="h-top">🏆 1st</div><h5>Autonomous Car Race</h5><span>ECE445M F-0001 race @ UT Austin · Apr 2026 →</span></a>
+      <a class="honor reveal d1" href="projects/rescuevision.html"><div class="h-top">🏆 1st</div><h5>Analog Devices Sensor Fusion Track</h5><span>StarkHacks @ Purdue · Apr 2026 →</span></a>
+      <a class="honor reveal d2" href="projects/smartpt.html"><div class="h-top">🏆 1st</div><h5>Healthcare Track</h5><span>Nexhacks @ CMU · Jan 2026 →</span></a>
+      <a class="honor reveal" href="#coursework"><div class="h-top">4.00</div><h5>GPA at UT Austin</h5><span>ECE Honors · view coursework →</span></a>
+      <a class="honor reveal d1" href="projects/harmonium.html"><div class="h-top">★</div><h5>Most Risky Hack</h5><span>TVG Vibeathon · Oct 2025 →</span></a>
+      <div class="honor reveal d2"><div class="h-top">🎓</div><h5>Engineering Honors Scholarship</h5><span>Virginia &amp; Ernest Cockrell Jr. · UT Austin</span></div>
+    </div>
+    <div class="testscores reveal">
+      <span class="ts-label">Standardized Tests</span>
+      <div class="ts-items">
+        <div><b>1590</b><i>/1600</i> · SAT</div>
+        <div><b>1520</b><i>/1520</i> · PSAT</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- COURSEWORK ---------- -->
+<section id="coursework">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="idx">05 — Coursework</div>
+        <h2>What I've<br>studied</h2>
+      </div>
+      <p>ECE Honors coursework at UT Austin — embedded systems, computing, signals &amp; circuits, and the
+        math underneath. All A's (4.00).</p>
+    </div>
+    <div class="coursegroups">
+      <div class="reveal">
+        <h6>Embedded & Systems</h6>
+        <div class="course"><span class="code">ECE319H</span><span class="name">Intro to Embedded Systems (Honors)</span></div>
+        <div class="course"><span class="code">ECE445M</span><span class="name">Embedded & Real-Time Systems Laboratory</span></div>
+        <div class="course"><span class="code">ECE460N</span><span class="name">Computer Architecture</span></div>
+        <div class="course"><span class="code">ECE306</span><span class="name">Introduction to Computing</span></div>
+      </div>
+      <div class="reveal d1">
+        <h6>Software & Computing</h6>
+        <div class="course"><span class="code">ECE312H</span><span class="name">Software Design & Implementation I (Honors)</span></div>
+        <div class="course"><span class="code">COE379L</span><span class="name">Software Design for Responsible Intelligent Systems</span></div>
+        <div class="course"><span class="code">CS309</span><span class="name">Quantum Computing I (FRI)</span></div>
+      </div>
+      <div class="reveal">
+        <h6>Signals, Circuits & Hardware</h6>
+        <div class="course"><span class="code">ECE302</span><span class="name">Intro to Electrical Engineering</span></div>
+        <div class="course"><span class="code">ECE313H</span><span class="name">Linear Systems & Signals (Honors)</span></div>
+        <div class="course"><span class="code">ECE411H</span><span class="name">Circuit Theory (Honors)</span></div>
+        <div class="course"><span class="code">ECE316</span><span class="name">Digital Logic Design</span></div>
+        <div class="course"><span class="code">ECE385J</span><span class="name">Neural Engineering</span></div>
+      </div>
+      <div class="reveal d1">
+        <h6>Mathematics</h6>
+        <div class="course"><span class="code">M427L</span><span class="name">Multivariable Calculus (Honors)</span></div>
+        <div class="course"><span class="code">M427J</span><span class="name">Differential Equations w/ Linear Algebra</span></div>
+        <div class="course"><span class="code">M340L</span><span class="name">Matrices & Matrix Calculations</span></div>
+        <div class="course"><span class="code">M325K</span><span class="name">Discrete Mathematics</span></div>
+      </div>
+      <div class="reveal">
+        <h6>Communication & Innovation</h6>
+        <div class="course"><span class="code">ECE333T</span><span class="name">Engineering Communication</span></div>
+        <div class="course"><span class="code">MAN327</span><span class="name">Innovation & Entrepreneurship</span></div>
+      </div>
+    </div>
+    <p class="course-note reveal">Foundational calculus, engineering physics, and university core
+      requirements were cleared through AP and transfer credit (26 hours).</p>
+  </div>
+</section>
+
+<!-- ---------- SKILLS ---------- -->
+<section id="skills">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div>
+        <div class="idx">06 — Toolkit</div>
+        <h2>Skills</h2>
+      </div>
+      <p>Tap any skill to see the projects and courses where I put it to use.</p>
+    </div>
+    <div class="skillgroups">
+      <div class="reveal">
+        <h6>Embedded & Low-level</h6>
+        <div class="chips">
+          <span class="chip">Embedded C / C++</span><span class="chip">ARM Assembly</span><span class="chip">Device Drivers</span><span class="chip">GPIO · UART · USB</span><span class="chip">BLE</span><span class="chip">Memory & Power Mgmt</span><span class="chip">Arduino</span>
+        </div>
+      </div>
+      <div class="reveal d1">
+        <h6>Robotics, Controls & Autonomy</h6>
+        <div class="chips">
+          <span class="chip">ROS</span><span class="chip">Control Systems</span><span class="chip">Motor Control</span><span class="chip">LiDAR · Radar</span><span class="chip">Sensor Fusion</span><span class="chip">Kalman Filtering</span><span class="chip">Visual Odometry</span>
+        </div>
+      </div>
+      <div class="reveal">
+        <h6>Software & Languages</h6>
+        <div class="chips">
+          <span class="chip">C++</span><span class="chip">Python</span><span class="chip">C#</span><span class="chip">Java</span><span class="chip">Verilog</span><span class="chip">MATLAB / Simulink</span><span class="chip">Docker</span><span class="chip">FastAPI</span>
+        </div>
+      </div>
+      <div class="reveal d1">
+        <h6>Hardware, Vision & Sim</h6>
+        <div class="chips">
+          <span class="chip">PCB Design</span><span class="chip">SolidWorks · Fusion 360</span><span class="chip">Ansys / FEA</span><span class="chip">3D Printing</span><span class="chip">Computer Vision</span><span class="chip">Machine Learning</span><span class="chip">Signal Processing</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- CONTACT ---------- -->
+<section id="contact" class="contact">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="idx" style="justify-content:center">07 — Contact</div>
+      <h2>Let's build<br>something</h2>
+      <a class="mail" href="mailto:adipu@utexas.edu">adipu@utexas.edu</a>
+      <div class="socials">
+        <a class="btn" href="assets/resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
+        <a class="btn" href="https://www.linkedin.com/in/aditya-pulipaka" target="_blank">LinkedIn ↗</a>
+        <a class="btn" href="https://github.com/pulipakaa24" target="_blank">GitHub ↗</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <span>© <span id="yr"></span> Aditya Pulipaka</span>
+  <span>Austin, TX</span>
+</footer>
+
+<!-- profile photo lightbox -->
+<div id="lightbox" class="lightbox" aria-hidden="true">
+  <div class="lb-card" role="dialog" aria-modal="true" aria-label="Profile photo">
+    <div class="lb-head">
+      <span class="lb-title">Want a closer look? I'm flattered! 😁</span>
+      <button class="lb-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <img src="assets/profile_full.jpg" alt="Aditya Pulipaka" />
+  </div>
+</div>
+
+<script>
+  // nav background on scroll
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('scrolled', scrollY > 24);
+  addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+  // reveal on enter
+  const io = new IntersectionObserver((entries)=>{
+    for(const e of entries){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } }
+  }, {threshold:.14, rootMargin:'0px 0px -8% 0px'});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+  // hero glow — trails the pointer, positioned against the hero's live rect (so
+  // it stays accurate while scrolling) and eased in a rAF loop (so fast moves
+  // don't stair-step the way a CSS transition does).
+  const glow = document.getElementById('glow');
+  const hero = document.querySelector('.hero');
+  if (glow && hero && !matchMedia('(prefers-reduced-motion: reduce)').matches){
+    let tx = innerWidth/2, ty = innerHeight*0.42;   // target, in viewport coords
+    let cx = tx, cy = ty;                            // current (eased)
+    let raf = 0;
+    const place = ()=>{
+      const r = hero.getBoundingClientRect();
+      glow.style.transform = `translate(${cx - r.left - 380}px, ${cy - r.top - 380}px)`;
+    };
+    const loop = ()=>{
+      cx += (tx - cx) * 0.18; cy += (ty - cy) * 0.18;
+      place();
+      raf = (Math.abs(tx - cx) > 0.4 || Math.abs(ty - cy) > 0.4) ? requestAnimationFrame(loop) : 0;
+    };
+    addEventListener('pointermove', (e)=>{
+      const r = hero.getBoundingClientRect();
+      if (e.clientY > r.bottom) return;             // hero scrolled out of view
+      tx = e.clientX; ty = e.clientY;
+      if (!raf) raf = requestAnimationFrame(loop);
+    }, { passive:true });
+    place();
+  }
+
+  // card spotlight follows pointer (relative to each card, so always accurate)
+  document.querySelectorAll('.card').forEach(card=>{
+    card.addEventListener('pointermove', e=>{
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', (e.clientX-r.left)+'px');
+      card.style.setProperty('--my', (e.clientY-r.top)+'px');
+    });
+  });
+
+  // placeholder links: gentle note instead of dead navigation
+  document.querySelectorAll('[data-placeholder]').forEach(a=>{
+    a.addEventListener('click', ev=>{ ev.preventDefault(); a.textContent = 'Add link in index.html'; });
+  });
+
+  document.getElementById('yr').textContent = new Date().getFullYear();
+
+  // ---------- profile photo lightbox ----------
+  const lb = document.getElementById('lightbox');
+  const photoFrame = document.querySelector('.photo-frame');
+  if (lb && photoFrame){
+    const openLb  = () => { lb.classList.add('open');  lb.setAttribute('aria-hidden','false'); };
+    const closeLb = () => { lb.classList.remove('open'); lb.setAttribute('aria-hidden','true'); };
+    photoFrame.setAttribute('role','button');
+    photoFrame.setAttribute('tabindex','0');
+    photoFrame.setAttribute('aria-label','Open a larger profile photo');
+    photoFrame.addEventListener('click', openLb);
+    photoFrame.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openLb(); } });
+    lb.addEventListener('click', e => { if (e.target === lb || e.target.closest('.lb-close')) closeLb(); });
+    addEventListener('keydown', e => { if (e.key === 'Escape') closeLb(); });
+  }
+
+  // ---------- skill → projects/courses popover ----------
+  // Source of truth: each project/course declares the skills it exercised; we
+  // invert that into SKILL_MAP so a chip click can list where the skill shows up.
+  const PROJECTS = [
+    { name:'Guadaloop Test Rig', href:'site_prototype/index.html', skills:['Embedded C / C++','Arduino','Control Systems','Motor Control','Sensor Fusion','MATLAB / Simulink','Ansys / FEA','SolidWorks · Fusion 360','PCB Design','Machine Learning','Python'] },
+    { name:'RescueVision',       href:'projects/rescuevision.html', skills:['Embedded C / C++','BLE','Device Drivers','Sensor Fusion','LiDAR · Radar','Computer Vision','SolidWorks · Fusion 360'] },
+    { name:'SmartPT',            href:'projects/smartpt.html',      skills:['Embedded C / C++','BLE','Sensor Fusion','Kalman Filtering','Computer Vision','Machine Learning','Signal Processing'] },
+    { name:'LiDAR SLAM',         href:'projects/lidar-slam.html',   skills:['ROS','C++','Python','LiDAR · Radar','Visual Odometry','Sensor Fusion'] },
+    { name:'TweinStein',         href:'projects/tweinstein.html',   skills:['Embedded C / C++','GPIO · UART · USB','Memory & Power Mgmt','Control Systems','Motor Control','LiDAR · Radar','Machine Learning','Signal Processing'] },
+    { name:'BlindMaster',        href:'projects/blindmaster.html',  skills:['Embedded C / C++','BLE','Device Drivers','GPIO · UART · USB','Memory & Power Mgmt'] },
+    { name:'Harmonium',          href:'projects/harmonium.html',    skills:['Computer Vision','Signal Processing','Python'] },
+  ];
+  const COURSES = [
+    { code:'ECE319H', name:'Intro to Embedded Systems',        skills:['Embedded C / C++','ARM Assembly','GPIO · UART · USB','Device Drivers','Arduino'] },
+    { code:'ECE445M', name:'Embedded & Real-Time Systems Lab', skills:['Embedded C / C++','GPIO · UART · USB','Memory & Power Mgmt','Device Drivers','Control Systems','Motor Control'] },
+    { code:'ECE460N', name:'Computer Architecture',            skills:['ARM Assembly','Memory & Power Mgmt'] },
+    { code:'ECE312H', name:'Software Design & Impl. I',        skills:['C++','Java'] },
+    { code:'ECE306',  name:'Introduction to Computing',        skills:['C++','Python'] },
+    { code:'ECE316',  name:'Digital Logic Design',             skills:['Verilog'] },
+    { code:'ECE302',  name:'Intro to Electrical Engineering',  skills:['PCB Design'] },
+    { code:'ECE313H', name:'Linear Systems & Signals',         skills:['Signal Processing','Control Systems','Sensor Fusion','Kalman Filtering','MATLAB / Simulink'] },
+    { code:'ECE411H', name:'Circuit Theory',                   skills:['PCB Design'] },
+    { code:'ECE385J', name:'Neural Engineering',               skills:['Signal Processing','Machine Learning'] },
+    { code:'COE379L', name:'SW Design for Intelligent Systems',skills:['Python','Machine Learning','Computer Vision'] },
+  ];
+  const SKILL_MAP = (() => {
+    const m = {};
+    const slot = s => (m[s] = m[s] || { projects:[], courses:[] });
+    for (const p of PROJECTS) for (const s of p.skills) slot(s).projects.push({ name:p.name, href:p.href });
+    for (const c of COURSES)  for (const s of c.skills) slot(s).courses.push({ code:c.code, name:c.name });
+    return m;
+  })();
+
+  let pane = null;
+  const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function closePane(){
+    if (pane) pane.classList.remove('open');
+    document.querySelectorAll('#skills .chip.active').forEach(c => c.classList.remove('active'));
+  }
+  function openPane(chip){
+    const name = chip.textContent.trim();
+    const d = SKILL_MAP[name] || { projects:[], courses:[] };
+    if (!pane){ pane = document.createElement('div'); pane.className = 'skillpane'; document.body.appendChild(pane);
+      pane.addEventListener('click', e => e.stopPropagation()); }
+    let html = `<h4>${esc(name)}</h4>`;
+    if (d.projects.length) html += `<div class="sp-group"><div class="sp-label">Used in</div>` +
+      d.projects.map(p => `<a class="sp-proj" href="${p.href}">${esc(p.name)} <span>→</span></a>`).join('') + `</div>`;
+    if (d.courses.length) html += `<div class="sp-group"><div class="sp-label">Studied in</div>` +
+      d.courses.map(c => `<div class="sp-course"><b>${esc(c.code)}</b><span>${esc(c.name)}</span></div>`).join('') + `</div>`;
+    if (!d.projects.length && !d.courses.length) html +=
+      `<div class="sp-group"><div class="sp-empty">Part of my broader toolkit — picked up on the job or self-taught, not yet tied to a listed project or course.</div></div>`;
+    pane.innerHTML = html;
+
+    document.querySelectorAll('#skills .chip.active').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    // position under the chip, flipping above / clamping to viewport as needed
+    pane.style.visibility = 'hidden'; pane.classList.add('open');
+    const r = chip.getBoundingClientRect(), pw = pane.offsetWidth, ph = pane.offsetHeight;
+    let left = Math.min(Math.max(r.left + scrollX, scrollX + 16), scrollX + innerWidth - pw - 16);
+    let top  = (r.bottom + ph + 16 > innerHeight) ? r.top + scrollY - ph - 8 : r.bottom + scrollY + 8;
+    pane.style.left = left + 'px'; pane.style.top = top + 'px';
+    pane.style.visibility = 'visible';
+  }
+  document.querySelectorAll('#skills .chip').forEach(chip => {
+    chip.setAttribute('tabindex', '0'); chip.setAttribute('role', 'button');
+    const toggle = e => { e.stopPropagation(); chip.classList.contains('active') ? closePane() : openPane(chip); };
+    chip.addEventListener('click', toggle);
+    chip.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(e); } });
+  });
+  addEventListener('click', closePane);
+  addEventListener('keydown', e => { if (e.key === 'Escape') closePane(); });
+  addEventListener('resize', closePane);
+  addEventListener('scroll', () => { if (pane && pane.classList.contains('open')) closePane(); }, { passive:true });
+</script>
+</body>
+</html>
