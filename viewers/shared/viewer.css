@@ -1,0 +1,111 @@
+/* ============================================================================
+   Shared 3D scroll-viewer styles.
+   Used by every project viewer under viewers/<project>/index.html.
+   The page supplies the body height (one tall storyboard region) and any
+   project-specific tweaks in its own <style>.
+   ========================================================================== */
+
+:root {
+  /* site palette */
+  --accent: #ff6a00;     /* burnt orange (UT) */
+  --accent2: #19d3ff;    /* cyan */
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #000; color: #fff;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+}
+body.editing { height: 100vh !important; overflow: hidden; }   /* lock scroll in editor mode */
+
+/* The WebGL canvas. Pages may wrap it to dock it into a corner later. */
+#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 1; }
+
+/* ---- Hero title — upper-left; the model overlaps its lower half ---- */
+#title {
+  position: fixed; inset: 0; z-index: 0;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+  padding: 13vh 0 0 7vw; text-align: left; pointer-events: none; will-change: transform, opacity;
+}
+#title h1 {
+  font-weight: 800; letter-spacing: -0.03em; line-height: 0.84;
+  font-size: clamp(46px, 11vw, 188px); text-transform: uppercase;
+}
+.ol { color: transparent; -webkit-text-stroke: 1.6px rgba(255,255,255,.9); }
+#title p { margin-top: 1.1rem; font-size: clamp(11px,1.3vw,16px); letter-spacing: 0.34em; text-transform: uppercase; opacity: 0.55; }
+
+/* ---- Section title — top-right; blurb — bottom-right; model on the left ---- */
+#panel {
+  position: fixed; top: 15vh; right: 6vw; z-index: 2; max-width: 40vw; text-align: right;
+  pointer-events: none; will-change: opacity; opacity: 0;
+}
+#panel .kick { display: block; font-size: 11px; letter-spacing: .34em; text-transform: uppercase; color: var(--accent); margin-bottom: .7rem; }
+#panel h2 { font-weight: 800; letter-spacing: -0.02em; line-height: .92; font-size: clamp(26px, 4.4vw, 64px); text-transform: uppercase; }
+#blurb {
+  position: fixed; bottom: 9vh; right: 6vw; z-index: 2; max-width: 34vw; text-align: right;
+  font-size: clamp(12.5px, 1.1vw, 15px); line-height: 1.55; color: rgba(255,255,255,.72);
+  pointer-events: none; will-change: opacity; opacity: 0;
+}
+#blurb .b-tag { display: block; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: rgba(255,255,255,.38); margin-bottom: .55rem; }
+
+/* ---- Dimension / annotation overlay (technical-drawing leader lines) ---- */
+#dims { position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0; }
+#dims svg { width: 100%; height: 100%; display: block; overflow: visible; }
+#dims .dl { stroke: rgba(255,255,255,.55); stroke-width: 1; fill: none; }
+#dims .dx { stroke: rgba(255,255,255,.28); stroke-width: 1; fill: none; }
+#dims .dt { fill: #fff; font-size: 12px; font-family: "Helvetica Neue",Arial,sans-serif; letter-spacing: .04em; }
+/* coloured axis labels for coordinate-frame call-outs */
+#dims .ax-x { fill: #ff5a5a; } #dims .ax-y { fill: #57e07a; } #dims .ax-z { fill: #5aa6ff; }
+#dims .pill { fill: rgba(10,10,10,.72); stroke: rgba(255,255,255,.18); }
+
+/* ---- HUD ---- */
+.hud { position: fixed; z-index: 3; font-size: 12px; letter-spacing: 0.05em; font-variant-numeric: tabular-nums; }
+#hud-progress { top: 14px; left: 14px; opacity: 0.7; color: rgba(255,255,255,.7); }
+#hint { position: fixed; z-index: 3; bottom: 16px; left: 14px; font-size: 11px; letter-spacing: 0.08em; opacity: 0.5; }
+#scrollhint {
+  position: fixed; z-index: 3; bottom: 20px; left: 50%; transform: translateX(-50%);
+  font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); opacity: 0.85;
+  animation: bob 1.8s ease-in-out infinite;
+}
+@keyframes bob { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,7px)} }
+
+#loader {
+  position: fixed; inset: 0; z-index: 6; background: #000; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; letter-spacing: 0.3em; text-transform: uppercase; transition: opacity .6s;
+}
+#loader.hidden { opacity: 0; pointer-events: none; }
+
+/* ---- site theme: top nav (ties each viewer back to the main site) ---- */
+nav { position: fixed; top: 0; left: 0; right: 0; z-index: 8;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 22px; pointer-events: none; }
+nav a { pointer-events: auto; text-decoration: none; }
+nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .02em; font-size: 14px; color: #fff; }
+nav .brand img { width: 24px; height: 24px; object-fit: contain; }
+nav .navright { display: flex; align-items: center; gap: 16px; }
+nav .lbl { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: rgba(255,255,255,.4); }
+nav .pbtn { font-size: 12px; font-weight: 700; letter-spacing: .03em; color: #fff;
+            border: 1px solid rgba(255,255,255,.2); border-radius: 999px; padding: 7px 14px; transition: .2s; }
+nav .pbtn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+body.editing nav { display: none; }
+
+/* ---- editor overlay (shared shell; each viewer fills #legend contents) ---- */
+#editor { position: fixed; z-index: 4; inset: 0; pointer-events: none; display: none; }
+body.editing #editor { display: block; }
+body.editing #scrollhint, body.editing #title,
+body.editing #panel, body.editing #blurb, body.editing #dims { display: none; }
+#legend {
+  position: fixed; top: 14px; right: 14px; pointer-events: auto;
+  background: rgba(15,15,15,.9); border: 1px solid #333; border-radius: 10px; padding: 12px 14px; font-size: 12px; line-height: 1.6;
+  backdrop-filter: blur(6px); max-width: 320px; max-height: 92vh; overflow: auto;
+}
+#legend h3 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 8px; }
+#legend .row { display: flex; align-items: center; gap: 8px; }
+#legend .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border:1px solid rgba(255,255,255,.2); }
+#legend .muted { opacity: .6; font-size: 11px; margin-top: 8px; }
+#legend button { margin-top:10px; pointer-events:auto; background:#fff; color:#000; border:0; border-radius:6px; padding:6px 10px; font-weight:700; cursor:pointer; font-size:11px; letter-spacing:.05em;}
+#picked { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); pointer-events:none;
+  background: rgba(15,15,15,.85); border:1px solid #333; border-radius: 8px; padding: 8px 14px; font-size: 13px; max-width: 80vw; }
+#dump { position: fixed; inset: 10% 15%; z-index: 7; display:none; background:#0c0c0c; border:1px solid #333; border-radius:12px; padding:16px; }
+#dump textarea { width:100%; height: calc(100% - 40px); background:#000; color:#9f9; border:1px solid #333; border-radius:8px; font-family: monospace; font-size:12px; padding:10px; resize:none;}
+#dump .x { float:right; cursor:pointer; pointer-events:auto; }

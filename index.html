@@ -181,6 +181,15 @@
       display:flex; align-items:center; justify-content:center; position:relative}
   .card.feat .ph small{position:absolute; bottom:12px; left:16px; color:var(--faint); font-size:11px; letter-spacing:.2em; text-transform:uppercase}
   .card.feat .ph .mark{font-size:13px; letter-spacing:.3em; color:var(--accent2); text-transform:uppercase; border:1px solid rgba(25,211,255,.4); padding:9px 16px; border-radius:999px}
+  /* image thumbnails fill the panel; logo marks sit centered on a dark tile */
+  .card.feat .ph img.cover{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; display:block}
+  .card.feat .ph.logo-ph{background:radial-gradient(120% 120% at 50% 28%, rgba(255,106,0,.16), transparent 62%), #0a0a0a}
+  .card.feat .ph img.logo{max-width:46%; max-height:58%; object-fit:contain; filter:invert(1); opacity:.9}
+  /* subtle "3D" badge in the corner of the live-rig thumbnail */
+  .card.feat .ph .d3{position:absolute; bottom:12px; right:12px; z-index:2; display:inline-flex; align-items:center; gap:6px;
+      padding:5px 9px; border-radius:8px; background:rgba(10,10,10,.55); backdrop-filter:blur(4px);
+      border:1px solid rgba(255,255,255,.18); color:rgba(255,255,255,.85); font-size:10px; letter-spacing:.14em; text-transform:uppercase}
+  .card.feat .ph .d3 svg{width:12px; height:12px}
   .card.feat .meat{padding:34px 38px 34px 0; flex:1}
 
   /* ---------- timeline ---------- */
@@ -352,20 +361,20 @@
         <div class="idx">02 — Selected Work</div>
         <h2>Things I've<br>built</h2>
       </div>
-      <p>A mix of research, internships, and hackathon wins. Case-study pages are in progress — the
-        Guadaloop rig already has a live 3D walkthrough.</p>
+      <p>A mix of research, internships, and hackathon wins. The Guadaloop rig and RescueVision both
+        have live, scroll-driven 3D walkthroughs.</p>
     </div>
 
     <div class="work-grid">
 
-      <!-- FEATURED: live 3D rig -->
-      <a class="card feat reveal" href="site_prototype/index.html">
-        <div class="ph"><span class="mark">Live 3D ↗</span><small>Scroll-driven WebGL viewer</small></div>
+      <!-- FEATURED: Guadaloop 3D rig -->
+      <a class="card feat reveal" href="viewers/guadaloop/index.html">
+        <div class="ph">
+          <img class="cover" src="assets/projects/guadaloop/testrig.png" alt="Guadaloop levitation test rig CAD render" loading="lazy"/>
+          <span class="d3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>3D</span>
+        </div>
         <div class="meat">
-          <div class="top">
-            <h3>Guadaloop Levitation Test Rig</h3>
-            <span class="badge live">Live 3D</span>
-          </div>
+          <div class="top"><h3>Guadaloop Levitation Test Rig</h3></div>
           <p class="sub">An electromagnetic maglev test rig I lead development on — yoke, coils, gap-height
             sensors, and slide rails. Built the control stack from hand-tuned PID up toward a
             reinforcement-learning pipeline for the HEMS system. Explore the assembly in an
@@ -375,22 +384,41 @@
         </div>
       </a>
 
-      <!-- RescueVision -->
-      <a class="card reveal" href="projects/rescuevision.html">
-        <div class="top"><h3>RescueVision</h3><span class="badge win">🏆 1st · StarkHacks</span></div>
-        <p class="sub">An mmWave + UWB system that locates victims through walls and renders them in a
-          first responder's own AR frame. Won Analog Devices' Sensor Fusion track at Purdue's StarkHacks.</p>
-        <div class="tags"><span class="tag">mmWave Radar</span><span class="tag">Sensor Fusion</span><span class="tag">Embedded</span></div>
-        <span class="go">Read case study →</span>
+      <!-- FEATURED: RescueVision -->
+      <a class="card feat reveal" href="viewers/rescuevision/index.html">
+        <div class="ph"><img class="cover" src="assets/projects/rescuevision/groupPic.gif" alt="RescueVision team at StarkHacks" loading="lazy"/>
+          <span class="d3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>3D</span></div>
+        <div class="meat">
+          <div class="top"><h3>RescueVision</h3><span class="badge win">🏆 1st · StarkHacks</span></div>
+          <p class="sub">An mmWave + UWB system that locates victims through walls and renders them in a
+            first responder's own AR frame. Won Analog Devices' Sensor Fusion track at Purdue's StarkHacks.</p>
+          <div class="tags"><span class="tag">mmWave Radar</span><span class="tag">Sensor Fusion</span><span class="tag">Embedded</span></div>
+          <span class="go">Read case study →</span>
+        </div>
       </a>
 
-      <!-- SmartPT -->
-      <a class="card reveal d1" href="projects/smartpt.html">
-        <div class="top"><h3>SmartPT</h3><span class="badge win">🏆 1st · Nexhacks</span></div>
-        <p class="sub">A PT app fusing camera 3D pose with an optional ESP32 IMU via an EKF for real-time
-          form feedback. Won the Healthcare track at CMU's Nexhacks; live on TestFlight.</p>
-        <div class="tags"><span class="tag">Flutter</span><span class="tag">EKF</span><span class="tag">Sensor Fusion</span></div>
-        <span class="go">Read case study →</span>
+      <!-- FEATURED: SmartPT -->
+      <a class="card feat reveal" href="projects/smartpt.html">
+        <div class="ph"><img class="cover" src="assets/projects/smartpt/stagePic.jpeg" alt="SmartPT team winning the Healthcare track at Nexhacks" loading="lazy"/></div>
+        <div class="meat">
+          <div class="top"><h3>SmartPT</h3><span class="badge win">🏆 1st · Nexhacks</span></div>
+          <p class="sub">A PT app fusing camera 3D pose with an optional ESP32 IMU via an EKF for real-time
+            form feedback. Won the Healthcare track at CMU's Nexhacks; live on TestFlight.</p>
+          <div class="tags"><span class="tag">Flutter</span><span class="tag">EKF</span><span class="tag">Sensor Fusion</span></div>
+          <span class="go">Read case study →</span>
+        </div>
+      </a>
+
+      <!-- FEATURED: BlindMaster -->
+      <a class="card feat reveal" href="projects/blindmaster.html">
+        <div class="ph logo-ph"><img class="logo" src="assets/projects/blindmaster/icon.png" alt="BlindMaster app icon"/></div>
+        <div class="meat">
+          <div class="top"><h3>BlindMaster</h3></div>
+          <p class="sub">Full-stack IoT smart blinds — ESP32-C6 firmware, an Express + Socket.IO backend, and
+            a Flutter app, with BLE-only provisioning and end-to-end calibration. Solo.</p>
+          <div class="tags"><span class="tag">ESP32-C6</span><span class="tag">Embedded</span><span class="tag">Full-stack</span></div>
+          <span class="go">Read case study →</span>
+        </div>
       </a>
 
       <!-- LiDAR SLAM -->
@@ -408,15 +436,6 @@
         <p class="sub">An autonomous racer on a custom RTOS — PD wall-following, an RL residual, and a
           heuristic overtaking state machine. Won the ECE445M final race.</p>
         <div class="tags"><span class="tag">RTOS</span><span class="tag">Robotics</span><span class="tag">Controls</span></div>
-        <span class="go">Read case study →</span>
-      </a>
-
-      <!-- BlindMaster -->
-      <a class="card reveal" href="projects/blindmaster.html">
-        <div class="top"><h3>BlindMaster</h3></div>
-        <p class="sub">Full-stack IoT smart blinds — ESP32-C6 firmware, an Express + Socket.IO backend, and
-          a Flutter app, with BLE-only provisioning and end-to-end calibration. Solo.</p>
-        <div class="tags"><span class="tag">ESP32-C6</span><span class="tag">Embedded</span><span class="tag">Full-stack</span></div>
         <span class="go">Read case study →</span>
       </a>
 
@@ -512,7 +531,7 @@
     </div>
     <div class="honors">
       <a class="honor reveal" href="projects/tweinstein.html"><div class="h-top">🏆 1st</div><h5>Autonomous Car Race</h5><span>ECE445M F-0001 race @ UT Austin · Apr 2026 →</span></a>
-      <a class="honor reveal d1" href="projects/rescuevision.html"><div class="h-top">🏆 1st</div><h5>Analog Devices Sensor Fusion Track</h5><span>StarkHacks @ Purdue · Apr 2026 →</span></a>
+      <a class="honor reveal d1" href="viewers/rescuevision/index.html"><div class="h-top">🏆 1st</div><h5>Analog Devices Sensor Fusion Track</h5><span>StarkHacks @ Purdue · Apr 2026 →</span></a>
       <a class="honor reveal d2" href="projects/smartpt.html"><div class="h-top">🏆 1st</div><h5>Healthcare Track</h5><span>Nexhacks @ CMU · Jan 2026 →</span></a>
       <a class="honor reveal" href="#coursework"><div class="h-top">4.00</div><h5>GPA at UT Austin</h5><span>ECE Honors · view coursework →</span></a>
       <a class="honor reveal d1" href="projects/harmonium.html"><div class="h-top">★</div><h5>Most Risky Hack</h5><span>TVG Vibeathon · Oct 2025 →</span></a>
@@ -724,8 +743,8 @@
   // Source of truth: each project/course declares the skills it exercised; we
   // invert that into SKILL_MAP so a chip click can list where the skill shows up.
   const PROJECTS = [
-    { name:'Guadaloop Test Rig', href:'site_prototype/index.html', skills:['Embedded C / C++','Arduino','Control Systems','Motor Control','Sensor Fusion','MATLAB / Simulink','Ansys / FEA','SolidWorks · Fusion 360','PCB Design','Machine Learning','Python'] },
-    { name:'RescueVision',       href:'projects/rescuevision.html', skills:['Embedded C / C++','BLE','Device Drivers','Sensor Fusion','LiDAR · Radar','Computer Vision','SolidWorks · Fusion 360'] },
+    { name:'Guadaloop Test Rig', href:'viewers/guadaloop/index.html', skills:['Embedded C / C++','Arduino','Control Systems','Motor Control','Sensor Fusion','MATLAB / Simulink','Ansys / FEA','SolidWorks · Fusion 360','PCB Design','Machine Learning','Python'] },
+    { name:'RescueVision',       href:'viewers/rescuevision/index.html', skills:['Embedded C / C++','BLE','Device Drivers','Sensor Fusion','LiDAR · Radar','Computer Vision','SolidWorks · Fusion 360'] },
     { name:'SmartPT',            href:'projects/smartpt.html',      skills:['Embedded C / C++','BLE','Sensor Fusion','Kalman Filtering','Computer Vision','Machine Learning','Signal Processing'] },
     { name:'LiDAR SLAM',         href:'projects/lidar-slam.html',   skills:['ROS','C++','Python','LiDAR · Radar','Visual Odometry','Sensor Fusion'] },
     { name:'TweinStein',         href:'projects/tweinstein.html',   skills:['Embedded C / C++','GPIO · UART · USB','Memory & Power Mgmt','Control Systems','Motor Control','LiDAR · Radar','Machine Learning','Signal Processing'] },

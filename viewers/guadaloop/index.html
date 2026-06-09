@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Guadaloop Levitation Test Rig — Aditya Pulipaka</title>
+<link rel="icon" href="../../assets/logo.png" />
+<link rel="stylesheet" href="../shared/viewer.css" />
+<style>
+  body { height: 1500vh; }                                   /* room for the multi-stage storyboard */
+  /* grouping-editor swatch colours (this viewer's editor assigns vis groups) */
+  :root { --yoke:#ff6a00; --sensors:#19d3ff; --rails:#39ff88; --chassis:#ff3df0; --other:#8a8a8a; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="../../index.html"><img src="../../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navright">
+    <span class="lbl">Guadaloop Test Rig</span>
+    <a class="pbtn" href="../../index.html#work">← Back to work</a>
+  </div>
+</nav>
+
+<div id="loader">Loading model…</div>
+<div id="title"><h1>Guadaloop<br><span class="ol">Testrig</span></h1><p>Scroll to explore</p></div>
+<div id="panel"><span class="kick"></span><h2></h2></div>
+<div id="blurb"></div>
+<div id="dims"></div>
+<canvas id="c"></canvas>
+
+<div id="hud-progress" class="hud">0%</div>
+<div id="scrollhint">scroll ↓</div>
+<div id="hint">press <b>G</b> to edit part groups</div>
+
+<div id="editor">
+  <div id="legend">
+    <h3>Grouping editor</h3>
+    <div class="row"><span class="sw" style="background:var(--yoke)"></span> yoke (BabyYoke + coils)</div>
+    <div class="row"><span class="sw" style="background:var(--sensors)"></span> sensors (DW-AD modules)</div>
+    <div class="row"><span class="sw" style="background:var(--rails)"></span> rails (slide system)</div>
+    <div class="row"><span class="sw" style="background:var(--chassis)"></span> chassis (frame)</div>
+    <div class="row"><span class="sw" style="background:var(--other)"></span> other / hidden</div>
+    <div class="muted">Drag to orbit. Click a part to cycle its group. Press <b>E</b> to export JSON, <b>G</b> to exit.</div>
+    <button id="exportBtn">Export grouping JSON</button>
+  </div>
+  <div id="picked">click a part…</div>
+</div>
+
+<div id="dump"><span class="x" id="dumpClose">✕ close</span><div style="margin-bottom:8px;font-size:12px;opacity:.7">Copied to clipboard. Paste this into <b>groups.json</b> (replace the whole file), then reload.</div><textarea id="dumpText" readonly></textarea></div>
+
+<script type="module">
+import {
+  createStudioScene, loadGLB, prepareMeshes, centerModel, setOpacity,
+  frameCamera, makeVis, Storyboard, projectPoint, trapUpDown, clamp01, THREE
+} from '../shared/engine.js';
+
+const canvas = document.getElementById('c');
+const { renderer, scene, camera, controls, updateHeadlights } = createStudioScene(canvas, { exposure: 0.8 });
+
+// ---------- vis-groups + classification (rig-specific) ----------
+const VG = ['yokecore','coil','sensormod','sensorholder','railbar','railslider','railholder','railtrack','chassis','other'];
+const vis = makeVis(VG);
+const TRANS = 0.28;
+function semanticByName(o){
+  const n = o.name || '';
+  const mats = Array.isArray(o.material) ? o.material : [o.material];
+  if (mats.some(m => /polishedcopper/i.test(m.name||''))) return 'coil';
+  if (/BabyYoke/i.test(n)) return 'yokecore';
+  if (/DW-AD-509/i.test(n)) return 'sensormod';
+  if (/SensorMountLev|MidSensorHolder/i.test(n)) return 'sensorholder';
+  if (/Slide[ _]rail[ _]metal[ _]bar/i.test(n)) return 'railbar';
+  if (/Slide[ _]rail[ _]slider/i.test(n)) return 'railslider';
+  if (/SlideHolderTrack|MirrorSlide/i.test(n)) return 'railholder';
+  if (/TrackPiece/i.test(n)) return 'railtrack';
+  if (/Tslot|TwinExtrusion|Slide_Yoke_Mount|Steel[ _]Bar|LinMount/i.test(n)) return 'chassis';
+  return null;
+}
+const SECTION = { yoke:{kick:'Subsystem 01', title:'Levitation<br>Yoke'},
+                  sensors:{kick:'Subsystem 02', title:'DW-AD-509<br>Gap Sensors'},
+                  rails:{kick:'Subsystem 03', title:'Slide-Rail<br>System'} };
+
+// ---------- grouping editor config ----------
+const GROUP_COLORS = { yoke:0xff6a00, sensors:0x19d3ff, rails:0x39ff88, chassis:0xff3df0, other:0x8a8a8a };
+const CYCLE = ['yoke','sensors','rails','chassis','other'];
+const RULES = [
+  ['yoke',    /BabyYoke|coil placeholder/i],
+  ['sensors', /DW-AD-509/i],
+  ['rails',   /Slide rail|SlideHolderTrack|MirrorSlide|Slide_Yoke_Mount|Steel Bar|TrackPiece|LinMount/i],
+  ['chassis', /Tslot|TwinExtrusion|SensorMountLev|MidSensorHolder/i],
+];
+const ruleGroup = (name) => { for (const [g,re] of RULES) if (re.test(name)) return g; return null; };
+
+// ---------- state ----------
+let meshes = [], chapters = [];
+const boxes = {};
+const MOVERS = [];
+let editMode = false, progress = 0, shownProgress = 0;
+let story = null;
+const dimsEl = document.getElementById('dims');
+
+// ---------- load ----------
+let OVERRIDES = {};
+fetch('groups.json').then(r => r.ok ? r.json() : {}).then(j => { OVERRIDES = (j && j.groups) ? j.groups : (j || {}); }).catch(()=>{}).finally(start);
+
+async function start(){
+  let gltf;
+  try { gltf = await loadGLB('model_plain.glb'); }
+  catch(err){ document.getElementById('loader').innerHTML = '<div style="color:#f55;text-align:center">Failed to load model_plain.glb.<br>Serve over HTTP &amp; check the console.</div>'; console.error(err); return; }
+  const model = gltf.scene;
+
+  // grab the polished-steel look so the bluish "defaultplastic" vertical bars can match it
+  let steelRef = null;
+  model.traverse(o => { if (steelRef || !o.isMesh) return; const mats = Array.isArray(o.material)?o.material:[o.material];
+    const s = mats.find(m => /polishedsteel/i.test(m.name||'')); if (s) steelRef = { color:s.color.clone(), metalness:s.metalness, roughness:s.roughness }; });
+  const isMetalBar = (name) => /slide[ _]rail[ _]metal[ _]bar/i.test(name||'');
+
+  meshes = prepareMeshes(model, (m, o) => {
+    m.envMapIntensity = 0.8;
+    if (isMetalBar(o.name) && steelRef){ if (m.color) m.color.copy(steelRef.color); m.metalness = steelRef.metalness; m.roughness = steelRef.roughness; }
+    if (m.metalness !== undefined && m.metalness > 0.5) m.roughness = Math.max(m.roughness ?? 0.5, 0.34);  // satin floor
+  });
+
+  // coarse group (editor) : override -> rule -> geometry backfill -> other
+  const geoGroup = new Map();
+  for (const o of meshes){ const g = OVERRIDES[o.name] || ruleGroup(o.name || ''); if (g) geoGroup.set(o.geometry.uuid, g); }
+  for (const o of meshes) o.userData.group = OVERRIDES[o.name] || ruleGroup(o.name || '') || geoGroup.get(o.geometry.uuid) || 'other';
+  // fine vis-group : name -> geometry backfill -> coarse fallback -> other
+  const geoSem = new Map();
+  for (const o of meshes){ const t = semanticByName(o); if (t) geoSem.set(o.geometry.uuid, t); }
+  for (const o of meshes) o.userData.vis = semanticByName(o) || geoSem.get(o.geometry.uuid) || ({ yoke:'yokecore', chassis:'chassis' })[o.userData.group] || 'other';
+
+  boxes.all = centerModel(model, scene);
+  const boxOf = (vgs) => { const b = new THREE.Box3(); meshes.filter(m => vgs.includes(m.userData.vis)).forEach(m => b.expandByObject(m)); return b.isEmpty() ? boxes.all.clone() : b; };
+  boxes.yoke = boxOf(['yokecore','coil']); boxes.sensors = boxOf(['sensormod','sensorholder']);
+  boxes.rails = boxOf(['railbar','railslider','railholder','railtrack']); boxes.chassis = boxOf(['chassis']);
+  boxes.sizeY = boxes.all.getSize(new THREE.Vector3()).y;
+
+  // the travelling "sled": chassis + carried parts + lower carriages
+  const MOVE_VG = new Set(['chassis','yokecore','coil','sensormod','sensorholder']);
+  for (const o of meshes){
+    const lowerSlider = /slide[ _]rail[ _]slider-2/i.test(o.name || '');
+    if (!(MOVE_VG.has(o.userData.vis) || lowerSlider)) continue;
+    o.userData.worldBase = o.getWorldPosition(new THREE.Vector3());
+    o.userData.parentInv = new THREE.Matrix4().copy(o.parent.matrixWorld).invert();
+    MOVERS.push(o);
+  }
+
+  const side = (sec, blurb, tag) => ({ mode:'side', sec, blurb, tag });
+  const LATE = [0.45, 0.85];
+  chapters = [
+    { r:[0.00,0.07], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'hero'}, blurb:'', dims:null },
+    { r:[0.07,0.17], box:'yoke', view:'iso',  pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
+      panel:side('yoke','Two C-cores wrapped with the levitation coils. The coils render translucent so the steel cores they drive stay readable.','Placeholder copy'), dims:null },
+    { r:[0.17,0.26], box:'yoke', view:'front', pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
+      panel:side('yoke','Head-on: the working air-gap faces of the cores. Dimensions are placeholders pending the real drawing.','Front elevation'), dims:'yokeFront' },
+    { r:[0.26,0.34], box:'yoke', view:'top',  pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
+      panel:side('yoke','Top-down: core spacing and coil footprint. Placeholder dimensions.','Plan view'), dims:'yokeTop' },
+    { r:[0.34,0.40], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, fade:LATE },
+    { r:[0.40,0.48], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:1}),
+      panel:side('sensors','Eddy-current gap-height sensors mounted around the rig. Isometric overview.','Placeholder copy'), dims:null },
+    { r:[0.48,0.56], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:TRANS}),
+      panel:side('sensors','The printed holder pieces turn translucent so the sensor bodies and their aim are clear.','Exploded read'), dims:null },
+    { r:[0.56,0.64], box:'sensors', view:'top', pan:0.5, vis:vis({sensormod:1, sensorholder:TRANS}),
+      panel:side('sensors','Top-down sensor placement. Placeholder dimensions.','Plan view'), dims:'sensorTop' },
+    { r:[0.64,0.70], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, fade:LATE },
+    { r:[0.70,0.78], box:'rails', view:'iso', pan:0.5, vis:vis({railbar:1, railslider:1, railholder:TRANS}),
+      panel:side('rails','The vertical rails and their carriages, with the track clamps shown translucent.','Stage 1 · rails & carriages'), dims:null },
+    { r:[0.78,0.85], box:'rails', view:'iso', pan:0.5, vis:vis({railbar:1, railslider:1, railholder:1, railtrack:TRANS}),
+      panel:side('rails','The clamps solidify and the track plate they carry fades in translucently.','Stage 2 · track'), dims:null },
+    { r:[0.85,0.91], box:'all', view:'iso', pan:0.35, vis:vis({ALL:1}),
+      panel:side('rails','Everything goes opaque and the rest of the assembly returns around the rail.','Stage 3 · assembled'), dims:null },
+    { r:[0.91,1.00], box:'all', view:'iso', pan:0, vis:vis({ALL:1}),
+      panel:side('rails','The chassis — carrying the yoke, sensors and its lower carriages — travels up the rails and back down on a smooth trapezoidal profile.','Stage 4 · travel'),
+      dims:null, motion:{ amp:0.16 } },
+  ];
+
+  story = new Storyboard({
+    chapters, meshes, boxes, camera,
+    els: { title:document.getElementById('title'), panel:document.getElementById('panel'), blurb:document.getElementById('blurb'), dims:dimsEl, hud:document.getElementById('hud-progress') },
+    sections: SECTION,
+    hooks: { onResolve: ({ i, localT }) => applyMotion(i, localT), drawDims }
+  });
+
+  controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
+  story.resolve(0);
+  document.getElementById('loader').classList.add('hidden');
+}
+
+// ---------- trapezoidal sled travel (world +Y) ----------
+const _mv = new THREE.Vector3();
+function applyMotion(i, localT){
+  const m = chapters[i] && chapters[i].motion;
+  const d = m ? (m.amp * (boxes.sizeY || 1) * trapUpDown(localT)) : 0;
+  for (const o of MOVERS){ _mv.copy(o.userData.worldBase); _mv.y += d; o.position.copy(_mv.applyMatrix4(o.userData.parentInv)); }
+}
+
+// ---------- dimension overlay ----------
+function drawDims(kind){
+  const box = kind.startsWith('yoke') ? boxes.yoke : kind.startsWith('sensor') ? boxes.sensors : boxes.all;
+  const mn = box.min, mx = box.max, V = THREE.Vector3, segs = [];
+  if (kind.endsWith('Front')){ const z = mx.z;
+    segs.push([ new V(mn.x,mn.y,z), new V(mx.x,mn.y,z), 'W —— mm' ]); segs.push([ new V(mn.x,mn.y,z), new V(mn.x,mx.y,z), 'H —— mm' ]);
+  } else { const y = mx.y;
+    segs.push([ new V(mn.x,y,mn.z), new V(mx.x,y,mn.z), 'W —— mm' ]); segs.push([ new V(mn.x,y,mn.z), new V(mn.x,y,mx.z), 'D —— mm' ]); }
+  let s = `<svg viewBox="0 0 ${innerWidth} ${innerHeight}">`;
+  for (const [pa,pb,label] of segs){ const a = projectPoint(camera,pa), b = projectPoint(camera,pb), cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
+    s += `<line class="dl" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
+    s += `<circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="2.5" fill="#fff"/><circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="2.5" fill="#fff"/>`;
+    s += `<text class="dt" x="${cx.toFixed(1)}" y="${(cy-7).toFixed(1)}" text-anchor="middle">${label}</text>`; }
+  dimsEl.innerHTML = s + `</svg>`;
+}
+
+// ---------- scroll input ----------
+addEventListener('scroll', () => { const max = document.body.scrollHeight - innerHeight; progress = max > 0 ? Math.min(Math.max(scrollY/max,0),1) : 0; }, { passive:true });
+
+// ---------- grouping editor ----------
+const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+const pickedEl = document.getElementById('picked');
+function applyEditColors(on){
+  for (const m of meshes){ const mats = Array.isArray(m.material)?m.material:[m.material];
+    mats.forEach((mt,k) => { if (!mt.color) return; if (on) mt.color.setHex(GROUP_COLORS[m.userData.group]||GROUP_COLORS.other); else if (m.userData.baseColors[k]) mt.color.copy(m.userData.baseColors[k]); });
+    setOpacity(m, 1); }
+}
+function enterEdit(){ editMode = true; document.body.classList.add('editing'); controls.enabled = true; controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
+  const A = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() }; frameCamera(camera, boxes.all, 'iso', 0, 1.6, A); camera.up.set(0,1,0); camera.position.copy(A.pos); camera.lookAt(controls.target); applyEditColors(true); }
+function exitEdit(){ editMode = false; document.body.classList.remove('editing'); controls.enabled = false; applyEditColors(false); story.resolve(progress); }
+addEventListener('keydown', (ev) => { const k = ev.key.toLowerCase(); if (k === 'g') editMode ? exitEdit() : enterEdit(); if (k === 'e' && editMode) exportJSON(); });
+renderer.domElement.addEventListener('click', (ev) => {
+  if (!editMode) return; const r = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((ev.clientX-r.left)/r.width)*2-1; pointer.y = -((ev.clientY-r.top)/r.height)*2+1;
+  raycaster.setFromCamera(pointer, camera); const hit = raycaster.intersectObjects(meshes, false)[0]; if (!hit) return;
+  const m = hit.object, next = CYCLE[(CYCLE.indexOf(m.userData.group)+1) % CYCLE.length];
+  for (const o of meshes) if (o.geometry.uuid === m.geometry.uuid || (m.name && o.name === m.name)) o.userData.group = next;
+  applyEditColors(true); pickedEl.textContent = `${m.name || '(unnamed)'} → ${next}`;
+});
+function exportJSON(){ const map = {}; for (const m of meshes) if (m.name) map[m.name] = m.userData.group;
+  const txt = JSON.stringify({ groups: map }, null, 2); navigator.clipboard?.writeText(txt).catch(()=>{});
+  document.getElementById('dumpText').value = txt; document.getElementById('dump').style.display = 'block'; }
+document.getElementById('exportBtn').addEventListener('click', exportJSON);
+document.getElementById('dumpClose').addEventListener('click', () => document.getElementById('dump').style.display='none');
+
+// ---------- loop ----------
+function tick(){
+  requestAnimationFrame(tick);
+  if (editMode){ controls.update(); }
+  else if (story){ shownProgress += (progress - shownProgress) * 0.12; story.resolve(shownProgress); }
+  updateHeadlights();
+  renderer.render(scene, camera);
+}
+tick();
+</script>
+</body>
+</html>
