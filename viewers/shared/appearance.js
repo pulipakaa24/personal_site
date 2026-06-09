@@ -62,30 +62,45 @@ function restore(mat, snap){
 export function applyAppearance(meshes, json){
   if (!json) return;
   const palette = json.palette || DEFAULT_PALETTE;
-  const byName = new Map();
+  const { byKey, byName } = indexMeshes(meshes);
   for (const m of meshes){
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     m.userData._snap = mats.map(snapshot);
-    if (m.name) (byName.get(m.name) || byName.set(m.name, []).get(m.name)).push(m);
   }
-  // whole-part assignments
-  for (const name in (json.parts || {})){
-    const preset = palette[json.parts[name]];
-    for (const m of (byName.get(name) || []))
+  // whole-part / sub-mesh assignments (key may be a unique key '<name>#<i>' or a bare name)
+  for (const k in (json.parts || {})){
+    const preset = palette[json.parts[k]];
+    for (const m of resolveMeshes(k, byKey, byName))
       (Array.isArray(m.material) ? m.material : [m.material]).forEach(mt => applyPreset(mt, preset));
   }
-  // single-facet assignments — BATCH per mesh so a part can carry many facets
-  for (const [name, assigns] of groupFaces(json.faces, palette))
-    for (const m of (byName.get(name) || [])) paintFacesMulti(m, assigns);
+  // facet / sub-body assignments — BATCH per mesh so a part can carry many
+  for (const [k, assigns] of groupFaces(json.faces, palette))
+    for (const m of resolveMeshes(k, byKey, byName)) paintFacesMulti(m, assigns);
 }
 
-// Group a flat faces[] list ({name,app,tris}) by mesh name into
-// name -> [{tris, preset}, ...] so one rebuild handles all facets of a part.
+// index meshes by unique key and by (possibly shared) name
+function indexMeshes(meshes){
+  const byKey = new Map(), byName = new Map();
+  for (const m of meshes){
+    if (m.userData.key) byKey.set(m.userData.key, m);
+    if (m.name) (byName.get(m.name) || byName.set(m.name, []).get(m.name)).push(m);
+  }
+  return { byKey, byName };
+}
+// '<name>#<i>' -> that one sub-mesh; a bare name -> all meshes sharing it (legacy)
+function resolveMeshes(k, byKey, byName){
+  if (k.includes('#')) { const m = byKey.get(k); return m ? [m] : []; }
+  return byName.get(k) || [];
+}
+
+// Group a flat faces[] list ({key|name, app, tris}) by target into
+// key -> [{tris, preset}, ...] so one rebuild handles all facets of a part.
 function groupFaces(faces, palette){
   const by = new Map();
   for (const fa of (faces || [])){
-    if (!by.has(fa.name)) by.set(fa.name, []);
-    by.get(fa.name).push({ tris: fa.tris, preset: palette[fa.app] });
+    const k = fa.key != null ? fa.key : fa.name;
+    if (!by.has(k)) by.set(k, []);
+    by.get(k).push({ tris: fa.tris, preset: palette[fa.app] });
   }
   return by;
 }
@@ -146,7 +161,9 @@ export class AppearanceEditor {
     this.applyAll();
   }
 
-  byName(name){ return this.meshes.filter(m => m.name === name); }
+  // resolve a target key: '<name>#<i>' -> that one sub-mesh; a bare name -> all
+  // meshes sharing it (legacy appearance.json compatibility).
+  resolve(k){ return k.includes('#') ? this.meshes.filter(m => m.userData.key === k) : this.meshes.filter(m => m.name === k); }
 
   applyAll(){
     // reset all to original, drop editor-added material slots/groups
@@ -158,12 +175,12 @@ export class AppearanceEditor {
       cur.forEach((mt, i) => restore(mt, m.userData._snap[i]));
       if (m.geometry && m.userData._geoCloned) m.geometry.clearGroups();
     }
-    for (const name in this.parts){
-      const preset = this.palette[this.parts[name]];
-      for (const m of this.byName(name)) (Array.isArray(m.material)?m.material:[m.material]).forEach(mt => applyPreset(mt, preset));
+    for (const k in this.parts){
+      const preset = this.palette[this.parts[k]];
+      for (const m of this.resolve(k)) (Array.isArray(m.material)?m.material:[m.material]).forEach(mt => applyPreset(mt, preset));
     }
-    for (const [name, assigns] of groupFaces(this.faces, this.palette))
-      for (const m of this.byName(name)) paintFacesMulti(m, assigns);
+    for (const [k, assigns] of groupFaces(this.faces, this.palette))
+      for (const m of this.resolve(k)) paintFacesMulti(m, assigns);
   }
 
   toggle(){ this.on ? this.exit() : this.enter(); }
@@ -186,24 +203,26 @@ export class AppearanceEditor {
     const m = hit.object;
     this.selected = m; this.helper.setFromObject(m); this.helper.visible = true;
     if (this.mode === 'part'){
-      if (!m.name){ this._pick(`(unnamed mesh — can't key by name; use Face mode)`); return; }
-      this.parts[m.name] = this.active;
+      // colour the whole clicked sub-mesh
+      this.parts[m.userData.key] = this.active;
       this.applyAll();
-      this._pick(`${m.name} → ${this.palette[this.active].name}`);
+      this._pick(`${m.name || 'sub-mesh'} → ${this.palette[this.active].name}`);
     } else {
-      // Face mode: paint the clicked triangle + its coplanar facet cluster.
+      // Body mode: the whole connected sub-body. Face mode: the coplanar facet.
       const tri = hit.faceIndex;
-      if (tri == null || !m.name){ this._pick('no face / unnamed mesh'); return; }
-      const tris = this._facet(m, tri);
-      this.faces.push({ name:m.name, app:this.active, tris });
+      if (tri == null){ this._pick('no face under cursor'); return; }
+      const cos = this.mode === 'body' ? -2 : Math.cos(8*Math.PI/180);   // -2 => connect everything
+      const tris = this._flood(m, tri, cos);
+      this.faces.push({ key:m.userData.key, app:this.active, tris });
       this.applyAll();
-      this._pick(`${m.name} · ${tris.length} facet tri(s) → ${this.palette[this.active].name}`);
+      this._pick(`${m.name || 'sub-mesh'} · ${tris.length} tri(s) [${this.mode}] → ${this.palette[this.active].name}`);
     }
   }
 
-  // Gather the connected, ~coplanar triangle cluster around a seed triangle
-  // (so clicking one facet of a CAD solid paints the whole flat face).
-  _facet(mesh, seed){
+  // Flood the triangle cluster around a seed. cos >= ... gates by coplanarity
+  // (Face mode); cos = -2 connects across every shared edge => the whole
+  // connected sub-body (Body mode).
+  _flood(mesh, seed, cos){
     const geo = mesh.geometry, pos = geo.attributes.position, idx = geo.index;
     const triCount = (idx ? idx.count : pos.count)/3;
     const vi = (t,k) => idx ? idx.getX(t*3+k) : t*3+k;
@@ -214,14 +233,14 @@ export class AppearanceEditor {
     const key = (t,k) => { const i=vi(t,k); return `${pos.getX(i).toFixed(3)},${pos.getY(i).toFixed(3)},${pos.getZ(i).toFixed(3)}`; };
     const vmap = new Map();
     for (let t=0;t<triCount;t++) for (let k=0;k<3;k++){ const kk=key(t,k); (vmap.get(kk)||vmap.set(kk,[]).get(kk)).push(t); }
-    const COS = Math.cos(8*Math.PI/180);
     const out = new Set([seed]), stack = [seed];
     while (stack.length){
       const t = stack.pop();
       for (let k=0;k<3;k++) for (const nb of (vmap.get(key(t,k))||[])){
         if (out.has(nb)) continue;
+        if (cos <= -1) { out.add(nb); stack.push(nb); continue; }   // body: connect all
         triNormal(nb, n2);
-        if (n2.dot(nrm) >= COS){ out.add(nb); stack.push(nb); }
+        if (n2.dot(nrm) >= cos){ out.add(nb); stack.push(nb); }     // face: coplanar only
       }
     }
     return [...out];
@@ -240,8 +259,9 @@ export class AppearanceEditor {
     const L = document.getElementById('legend'); if (!L) return;
     L.innerHTML = `<h3>Appearance editor</h3>
       <div style="display:flex;gap:6px;margin-bottom:8px">
-        <button data-mode="part" class="modebtn">Part</button>
-        <button data-mode="face" class="modebtn">Face</button>
+        <button data-mode="part" class="modebtn" title="whole clicked sub-mesh">Part</button>
+        <button data-mode="body" class="modebtn" title="whole connected sub-body">Body</button>
+        <button data-mode="face" class="modebtn" title="coplanar facet only">Face</button>
       </div>
       <div id="ed-palette"></div>
       <div style="margin-top:8px;border-top:1px solid #2a2a2a;padding-top:8px">
@@ -251,7 +271,7 @@ export class AppearanceEditor {
         <label class="muted" style="display:block">roughness <input type="range" id="ed-rough" min="0" max="1" step="0.01" style="width:100%"></label>
         <button id="ed-new">+ new appearance</button>
       </div>
-      <div class="muted">Pick an appearance, then click parts (or facets in Face mode). <b>${this.toggleKey.toUpperCase()}</b> exits.</div>
+      <div class="muted">Pick an appearance, then click. <b>Part</b>=sub-mesh · <b>Body</b>=connected sub-body · <b>Face</b>=flat facet. <b>${this.toggleKey.toUpperCase()}</b> exits.</div>
       <button id="ed-export">Export appearance JSON</button>
       <button id="ed-reset" style="background:#444;color:#fff">Reset all</button>`;
     L.querySelectorAll('.modebtn').forEach(btn => btn.onclick = () => { this.mode = btn.dataset.mode; this._syncUI(); });

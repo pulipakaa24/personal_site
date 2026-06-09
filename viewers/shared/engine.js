@@ -33,6 +33,7 @@ export const trapUpDown = t => t < 0.5 ? trap(t/0.5) : trap((1-t)/0.5);
 // ---------- camera views ----------
 export const VIEWS = {
   iso:   { dir: new THREE.Vector3(0.85, 0.5, 1.0).normalize(),  up: new THREE.Vector3(0,1,0) },
+  iso2:  { dir: new THREE.Vector3(0.28, 0.58, 1.0).normalize(), up: new THREE.Vector3(0,1,0) }, // gentle swing off iso
   isoL:  { dir: new THREE.Vector3(-0.85, 0.5, 1.0).normalize(), up: new THREE.Vector3(0,1,0) },
   front: { dir: new THREE.Vector3(0.02, 0.08, 1.0).normalize(), up: new THREE.Vector3(0,1,0) },
   back:  { dir: new THREE.Vector3(0.02, 0.08, -1.0).normalize(),up: new THREE.Vector3(0,1,0) },
@@ -135,6 +136,9 @@ export function prepareMeshes(model, onMaterial){
     mats.forEach((m, idx) => { if (onMaterial) onMaterial(m, o, idx); });
     o.userData.curOpacity = 1;
     o.userData.baseColors = mats.map(m => m.color ? m.color.clone() : null);
+    // stable, unique per-load key so the appearance editor can target individual
+    // sub-meshes (CAD primitives often share/lack names).
+    o.userData.key = (o.name || 'mesh') + '#' + meshes.length;
     meshes.push(o);
   });
   return meshes;
@@ -276,10 +280,17 @@ export class Storyboard {
         if (this._curBlurb !== key){ blurb.innerHTML = (c.panel.tag ? `<span class="b-tag">${c.panel.tag}</span>` : '') + c.panel.blurb; this._curBlurb = key; }
       }
     }
-    // dims overlay: appears once the camera has arrived (~localT 0.45)
+    // dims overlay: appears once the camera has arrived (~localT 0.45) and HOLDS
+    // across consecutive chapters that share the same dims kind (so a multi-stage
+    // call-out doesn't flicker at the boundary).
     if (dims){
-      const dfin = clamp01((localT - 0.45) / 0.2), dfout = clamp01((1 - localT) / 0.12);
-      const a = c.dims ? dfin * dfout : 0;
+      const pv = this.chapters[i-1], nx = this.chapters[i+1];
+      const samePrev = pv && pv.dims === c.dims, sameNext = nx && nx.dims === c.dims;
+      let a = c.dims ? 1 : 0;
+      if (c.dims){
+        if (!samePrev) a *= clamp01((localT - 0.45) / 0.2);
+        if (!sameNext) a *= clamp01((1 - localT) / 0.12);
+      }
       dims.style.opacity = a.toFixed(3);
       if (c.dims && a > 0.001 && this.hooks.drawDims) this.hooks.drawDims(c.dims, { localT, alpha:a });
     }

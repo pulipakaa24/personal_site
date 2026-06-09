@@ -125,7 +125,7 @@
 <script type="module">
 import {
   createStudioScene, loadGLB, prepareMeshes, centerModel, setOpacity,
-  frameCamera, makeVis, Storyboard, projectPoint, clamp01, lerp, smoothstep, ease, THREE
+  frameCamera, makeVis, Storyboard, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, THREE
 } from '../shared/engine.js';
 import { AppearanceEditor, applyAppearance } from '../shared/appearance.js';
 
@@ -192,16 +192,26 @@ async function start(){
   });
   for (const o of meshes) o.userData.vis = classify(o);
 
-  // Orient the model: stand it up (SolidWorks Z-up -> Y-up), spin it to face the
-  // viewer, and correct a slight roll. Each is a WORLD-axis rotation so they stay
-  // independent. Tunable via URL hash (#rx=&ry=&rz= in degrees) for quick tuning.
-  const ORI = { x:-90, y:-45, z:0 };
+  // Orient the model off the ESP32's own axes so the "brain" is the upright,
+  // camera-facing reference (not the radar). Stand the model up (SolidWorks Z-up
+  // -> Y-up), then rotate so the ESP32's long axis is exactly vertical and its
+  // component face points at the iso camera. ESP_U / ESP_N are the ESP32's long
+  // axis and face normal measured by PCA in the standup frame (see hub.glb).
+  const ESP_U = new THREE.Vector3(0.035, 0.979, 0.198).normalize();   // board "up"
+  const ESP_N = new THREE.Vector3(0.017, 0.198, -0.980).normalize();  // face normal (toward components)
+  model.rotation.set(0,0,0);
+  model.rotateOnWorldAxis(new THREE.Vector3(1,0,0), -Math.PI/2);      // stand up
+  model.updateMatrixWorld(true);
+  // Build the rotation that maps {ESP_U -> +Y, ESP_N -> camera azimuth} and apply it.
+  const camAz = new THREE.Vector3(VIEWS.iso.dir.x, 0, VIEWS.iso.dir.z).normalize();
+  const u = ESP_U.clone(), n = ESP_N.clone(), w = new THREE.Vector3().crossVectors(u, n).normalize();
+  const Ut = new THREE.Vector3(0,1,0), Nt = camAz.clone(), Wt = new THREE.Vector3().crossVectors(Ut, Nt).normalize();
+  const Ralign = new THREE.Matrix4().makeBasis(Ut, Nt, Wt).multiply(new THREE.Matrix4().makeBasis(u, n, w).invert());
+  model.quaternion.premultiply(new THREE.Quaternion().setFromRotationMatrix(Ralign));
+  // optional fine-tune via URL hash (#rx=&ry=&rz= in degrees, world axes)
   const hp = new URLSearchParams(location.hash.slice(1));
-  for (const k of ['x','y','z']) if (hp.has('r'+k)) ORI[k] = +hp.get('r'+k);
-  model.rotation.set(0,0,0); model.updateMatrixWorld(true);
-  model.rotateOnWorldAxis(new THREE.Vector3(1,0,0), ORI.x*Math.PI/180);
-  model.rotateOnWorldAxis(new THREE.Vector3(0,1,0), ORI.y*Math.PI/180);
-  model.rotateOnWorldAxis(new THREE.Vector3(0,0,1), ORI.z*Math.PI/180);
+  for (const [k, ax] of [['rx',[1,0,0]],['ry',[0,1,0]],['rz',[0,0,1]]])
+    if (hp.has(k)) model.rotateOnWorldAxis(new THREE.Vector3(...ax), (+hp.get(k))*Math.PI/180);
   model.updateMatrixWorld(true);
 
   centerModel(model, scene);
@@ -253,6 +263,36 @@ async function start(){
   document.getElementById('loader').classList.add('hidden');
 }
 
+// ---------- principal-axis analysis (for the real coordinate frames) ----------
+// Jacobi eigen-decomposition of a symmetric 3x3 (rows as arrays).
+function eigenSym3(A){
+  A = A.map(r => r.slice()); const V = [[1,0,0],[0,1,0],[0,0,1]];
+  for (let it=0; it<60; it++){
+    let p=0,q=1,mx=Math.abs(A[0][1]);
+    for (const [i,j] of [[0,1],[0,2],[1,2]]) if (Math.abs(A[i][j])>=mx){ mx=Math.abs(A[i][j]); p=i; q=j; }
+    if (mx<1e-12) break;
+    const phi=0.5*Math.atan2(2*A[p][q], A[q][q]-A[p][p]), c=Math.cos(phi), s=Math.sin(phi);
+    for (let k=0;k<3;k++){ const kp=A[k][p],kq=A[k][q]; A[k][p]=c*kp-s*kq; A[k][q]=s*kp+c*kq; }
+    for (let k=0;k<3;k++){ const pk=A[p][k],qk=A[q][k]; A[p][k]=c*pk-s*qk; A[q][k]=s*pk+c*qk; }
+    for (let k=0;k<3;k++){ const vp=V[k][p],vq=V[k][q]; V[k][p]=c*vp-s*vq; V[k][q]=s*vp+c*vq; }
+  }
+  return { vals:[A[0][0],A[1][1],A[2][2]], vecs:[0,1,2].map(j=>new THREE.Vector3(V[0][j],V[1][j],V[2][j])) };
+}
+// World-space principal axes of a vis-group: axes sorted by extent (desc) + the
+// sampled points (so callers can locate features like the antenna bump).
+function analyzeGroup(group){
+  const pts=[]; const v=new THREE.Vector3();
+  for (const m of meshes){ if (m.userData.vis!==group) continue; const pos=m.geometry.attributes.position;
+    const step=Math.max(1, Math.floor(pos.count/2500));
+    for (let i=0;i<pos.count;i+=step){ v.fromBufferAttribute(pos,i); m.localToWorld(v); pts.push(v.clone()); } }
+  const c=new THREE.Vector3(); pts.forEach(p=>c.add(p)); c.multiplyScalar(1/pts.length);
+  let xx=0,yy=0,zz=0,xy=0,xz=0,yz=0;
+  for (const p of pts){ const dx=p.x-c.x,dy=p.y-c.y,dz=p.z-c.z; xx+=dx*dx;yy+=dy*dy;zz+=dz*dz;xy+=dx*dy;xz+=dx*dz;yz+=dy*dz; }
+  const n=pts.length, e=eigenSym3([[xx/n,xy/n,xz/n],[xy/n,yy/n,yz/n],[xz/n,yz/n,zz/n]]);
+  const idx=[0,1,2].sort((a,b)=>e.vals[b]-e.vals[a]);
+  return { center:c, axes:idx.map(i=>e.vecs[i].normalize()), ext:idx.map(i=>2*Math.sqrt(Math.max(0,e.vals[i]))), pts };
+}
+
 // ---------- finale actors: ground grid, coord-frame gizmos, UWB waves, phone, link ----------
 function buildActors(){
   const grp = new THREE.Group(); scene.add(grp);
@@ -262,20 +302,67 @@ function buildActors(){
   const grid = new THREE.GridHelper(S*3, 30, 0x2a3340, 0x171c24);
   grid.position.y = baseY; grid.material.transparent = true; grid.material.opacity = 0; grp.add(grid);
 
-  // coordinate-frame gizmos at the radar (CS1) and UWB (CS2)
-  const gizmo = (origin) => {
+  // ---- real coordinate frames from each module's geometry (see dwm_geom.h) ----
+  // Each frame's axis ROLES follow the firmware/CAD; the two free sign choices per
+  // frame (boresight & down for CS1; flat-normal & down for CS2) default to the
+  // dwm_geom transform and are flippable live via URL hash for fine-tuning:
+  //   #cs1y=1 (flip radar boresight)  #cs1z=1 (flip radar Z/down)
+  //   #cs2x=1 (flip UWB flat normal)  #cs2z=1 (flip UWB Z/down)
+  const hp = new URLSearchParams(location.hash.slice(1));
+  const fl = k => hp.get(k)==='1' ? -1 : 1;
+  const COL = { x:0xff5a5a, y:0x57e07a, z:0x5aa6ff };   // red=X, green=Y, blue=Z
+  const fI = analyzeGroup('iwr'), fU = analyzeGroup('uwb');
+  const down = new THREE.Vector3(0,-1,0);
+  const dHub = fU.center.clone().sub(fI.center);        // radar -> UWB (for code-consistent signs)
+  const signed = (axis, ref) => { const a = axis.clone(); return a.dot(ref) < 0 ? a.negate() : a; };
+
+  // IWR frame: X = long body, Y = boresight (out the antenna bump), Z = width (down).
+  // Default boresight toward the protruding antenna bump (the small raised square);
+  // Z downward. Both flippable via hash if a sign reads wrong.
+  let pp=0, nn=0; for (const p of fI.pts){ const d=p.clone().sub(fI.center).dot(fI.axes[2]); if(d>0)pp=Math.max(pp,d); else nn=Math.max(nn,-d); }
+  const Y1 = fI.axes[2].clone().multiplyScalar((pp>=nn?1:-1) * fl('cs1y'));   // boresight / out the bump
+  const Z1 = signed(fI.axes[1], down).multiplyScalar(fl('cs1z'));             // width, down
+  const X1 = new THREE.Vector3().crossVectors(Y1, Z1).normalize();           // long body (right-handed)
+  Z1.crossVectors(X1, Y1).normalize();
+  // antenna bump = protrusion along +boresight; centre CS1 on that cluster.
+  let mx=-1e9; for (const p of fI.pts){ const d=p.clone().sub(fI.center).dot(Y1); if(d>mx)mx=d; }
+  const bumpPts = fI.pts.filter(p=>p.clone().sub(fI.center).dot(Y1) >= mx*0.78);
+  const csA = new THREE.Vector3(); bumpPts.forEach(p=>csA.add(p)); csA.multiplyScalar(1/Math.max(1,bumpPts.length));
+
+  // UWB frame: X = out the flat side, Y = out the thin side, Z = down.
+  const csB = fU.center.clone();
+  const outward = fU.center.clone().sub(boxes.all.getCenter(new THREE.Vector3()));
+  const X2 = signed(fU.axes[2], outward).multiplyScalar(fl('cs2x'));  // flat-side normal, outward
+  const Z2 = signed(fU.axes[0], down).multiplyScalar(fl('cs2z'));     // long in-plane, down
+  const Y2 = new THREE.Vector3().crossVectors(Z2, X2).normalize();    // thin side (right-handed)
+  Z2.crossVectors(X2, Y2).normalize();
+
+  const gizmo = (origin, X, Y, Z) => {
     const g = new THREE.Group(); g.position.copy(origin);
-    const L = S*0.16;
-    const ax = (dir,color) => { const a = new THREE.ArrowHelper(dir, new THREE.Vector3(), L, color, L*0.28, L*0.16);
-      a.line.material.transparent = a.cone.material.transparent = true; g.add(a); return a; };
-    g.userData.arrows = [ ax(new THREE.Vector3(1,0,0),0xff5a5a), ax(new THREE.Vector3(0,1,0),0x57e07a), ax(new THREE.Vector3(0,0,1),0x5aa6ff) ];
+    const L = S*0.10;
+    const ax = (dir,color) => { const a = new THREE.ArrowHelper(dir.clone().normalize(), new THREE.Vector3(), L, color, L*0.30, L*0.16);
+      for (const mt of [a.line.material, a.cone.material]){ mt.transparent = true; mt.depthTest = false; mt.depthWrite = false; }
+      a.line.renderOrder = a.cone.renderOrder = 10; g.add(a); return a; };
+    g.userData.arrows = [ ax(X,COL.x), ax(Y,COL.y), ax(Z,COL.z) ];
     g.visible = false; grp.add(g); return g;
   };
-  const giz1 = gizmo(centers.iwr), giz2 = gizmo(centers.uwb);
-  // link between the two frames
-  const linkGeo = new THREE.BufferGeometry().setFromPoints([centers.iwr, centers.uwb]);
-  const link = new THREE.Line(linkGeo, new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:0 }));
-  grp.add(link);
+  const giz1 = gizmo(csA, X1, Y1, Z1), giz2 = gizmo(csB, X2, Y2, Z2);
+
+  // Stepped offset path radar -> UWB along the IWR frame axes (dX, dY, dZ),
+  // drawn with the ACTUAL geometric components so it connects CS1 -> CS2;
+  // labelled with the real dwm_geom transform (-43.18, +13.97, +92.43 mm).
+  const dvec = csB.clone().sub(csA);
+  const p0 = csA.clone();
+  const p1 = p0.clone().addScaledVector(X1, dvec.dot(X1));
+  const p2 = p1.clone().addScaledVector(Y1, dvec.dot(Y1));
+  const p3 = p2.clone().addScaledVector(Z1, dvec.dot(Z1));   // == csB
+  const seg = (a, b, color) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a,b]),
+    new THREE.LineBasicMaterial({ color, transparent:true, opacity:0, depthTest:false })); l.renderOrder = 9; grp.add(l); return l; };
+  const steps = [ seg(p0,p1,COL.x), seg(p1,p2,COL.y), seg(p2,p3,COL.z) ];
+  const stepMids = [ p0.clone().lerp(p1,0.5), p1.clone().lerp(p2,0.5), p2.clone().lerp(p3,0.5) ];
+  const link = new THREE.Line(new THREE.BufferGeometry().setFromPoints([csA,csB]),
+    new THREE.LineDashedMaterial({ color:0xffffff, transparent:true, opacity:0, dashSize:S*0.02, gapSize:S*0.015 }));
+  link.computeLineDistances(); grp.add(link);
 
   // UWB waves: billboard rings expanding from the UWB module
   const waves = [];
@@ -313,7 +400,8 @@ function buildActors(){
   // scene box that encloses hub + phone home (so the finale camera frames both)
   boxes.scene = boxes.all.clone().expandByPoint(phoneHome).expandByPoint(new THREE.Vector3(phoneHome.x, baseY, phoneHome.z));
 
-  actors = { grp, grid, giz1, giz2, link, linkGeo, waves, phone, phoneHome, rangeDash, rangeSolid, rangeGeo, baseY };
+  actors = { grp, grid, giz1, giz2, steps, stepMids, link, csA, csB, waves, phone, phoneHome, rangeDash, rangeSolid, rangeGeo, baseY,
+             iwrFrame:{X:X1,Y:Y1,Z:Z1}, uwbFrame:{X:X2,Y:Y2,Z:Z2} };
 }
 
 // ---------- chapters ----------
@@ -336,12 +424,15 @@ function defineChapters(){
     { r:[0.36,0.48], box:'esp32', view:'iso', pan:0.5, vis:vis({ALL:TRANS, esp32:1}),
       panel:side('control','An ESP32-S3 is the hub brain: USB-host configures the radar, ESP-NN classifies each track as active / unconscious / phantom, and it runs the sweep + compass calibration.','Brain'), dims:null },
 
-    // 03 · frame-of-reference transform (gizmos + grid + dims)
-    { r:[0.48,0.62], box:'frame', view:'iso', pan:0.42, vis:vis({ALL:TRANS, iwr:1, uwb:1}),
+    // 03 · frame-of-reference transform (gizmos + grid + dims) — iso, zoomed out
+    { r:[0.48,0.56], box:'frame', view:'iso', pan:0.22, fit:2.5, vis:vis({ALL:TRANS, iwr:1, uwb:1}),
       panel:side('frame','Every detection starts in the radar’s frame. SolidWorks-derived offsets plus the live stepper angle transform it into the UWB module’s frame before it leaves the hub.','Radar → UWB'), dims:'transform' },
+    // second perspective: the camera swings a little so the axes' 3-D directions read clearly
+    { r:[0.56,0.64], box:'frame', view:'iso2', pan:0.22, fit:2.5, vis:vis({ALL:TRANS, iwr:1, uwb:1}),
+      panel:side('frame','A −10° tilt about X separates the two frames. Detections are rotated and offset (−43.18, +13.97, +92.43 mm) into the UWB frame before BLE.','Radar → UWB · second view'), dims:'transform' },
 
     // 04 · responder localization finale (zoom out, phone, waves, lock)
-    { r:[0.62,0.90], box:'scene', view:'iso', pan:0, fit:1.45, vis:vis({ALL:1}),
+    { r:[0.64,0.90], box:'scene', view:'iso', pan:0, fit:1.45, vis:vis({ALL:1}),
       panel:side('loc','The hub streams victim positions over BLE. The phone fuses UWB ranging with ARKit visual-inertial odometry (Gauss-Jordan) to place the hub — and the people it sees — in the responder’s own frame, even with no line of sight.','UWB × VIO'),
       dims:null, finale:true },
 
@@ -351,22 +442,27 @@ function defineChapters(){
 }
 
 // ---------- per-frame hook ----------
+// The frame-of-reference act spans two stages (iso -> iso2 swing); drive the grid,
+// gizmos and offset legs off GLOBAL progress so they persist across the boundary.
+const FRAME_R = [0.48, 0.64];
 const _v = new THREE.Vector3();
-function onResolve({ i, c, localT }){
+function onResolve({ p, i, c, localT }){
   if (!actors) return;
-  // grid visible across the frame + localization acts
-  const gridOn = (c.dims === 'transform') ? smoothstep((localT-0.2)/0.4) : c.finale ? 1 : 0;
+  const inT = c.dims === 'transform';
+  // grid: in across the whole frame act, and full during the localization finale
+  const gridOn = inT ? smoothstep((p-FRAME_R[0]-0.01)/0.04) : c.finale ? 1 : 0;
   actors.grid.material.opacity = 0.6 * gridOn;
   actors.grid.visible = gridOn > 0.01;
 
-  // coordinate-frame gizmos: fade arrows in during the transform act
-  const gizOn = (c.dims === 'transform') ? smoothstep((localT-0.25)/0.35) : 0;
+  // coordinate-frame gizmos: fade in early, hold across both stages, fade out at the end
+  const gizOn = inT ? smoothstep((p-0.505)/0.035) * (1 - smoothstep((p-0.628)/0.012)) : 0;
   for (const g of [actors.giz1, actors.giz2]){
     g.visible = gizOn > 0.01;
     for (const a of g.userData.arrows){ a.line.material.opacity = gizOn; a.cone.material.opacity = gizOn; }
   }
-  actors.link.material.opacity = 0.5 * gizOn;
-  actors.link.visible = gizOn > 0.01;
+  // the dX/dY/dZ legs reveal one after another during the first stage, then hold
+  actors.steps.forEach((l, k) => { const o = inT ? smoothstep((p - 0.52 - k*0.022)/0.028) * (1 - smoothstep((p-0.628)/0.012)) : 0; l.material.opacity = o; l.visible = o > 0.01; });
+  actors.link.material.opacity = 0.45 * gizOn; actors.link.visible = gizOn > 0.01;
 
   // ---- finale ----
   const fin = !!c.finale;
@@ -411,24 +507,22 @@ function onResolve({ i, c, localT }){
   }
 }
 
-// ---------- dimension / annotation overlay (the SolidWorks transform numbers) ----------
+// ---------- annotation overlay: labels for the coordinate frames + offset legs ----------
 function drawDims(kind, ctx){
   if (kind !== 'transform' || !actors) return;
-  const a = projectPoint(camera, centers.iwr), b = projectPoint(camera, centers.uwb);
-  const real = { dx:'43.18', dy:'54.82', dz:'83.47', dist:'108.8' };  // from the SolidWorks model
-  const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
-  let s = `<svg viewBox="0 0 ${innerWidth} ${innerHeight}">`;
-  s += `<line class="dx" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke-dasharray="5 4"/>`;
-  s += `<text class="dt" x="${a.x+10}" y="${a.y-8}">Coordinate System 1 · radar</text>`;
-  s += `<text class="dt" x="${b.x+10}" y="${b.y+18}">Coordinate System 2 · UWB</text>`;
-  const pill = (x,y,cls,txt) => {
-    const w = txt.length*7.0+16;
-    return `<rect class="pill" x="${x-w/2}" y="${y-12}" width="${w}" height="20" rx="5"/><text class="dt ${cls}" x="${x}" y="${y+3}" text-anchor="middle">${txt}</text>`;
+  const A = projectPoint(camera, actors.csA), B = projectPoint(camera, actors.csB);
+  const m = actors.stepMids.map(p => projectPoint(camera, p));
+  const real = ['43.18','13.97','92.43'], dist = '103.0';   // dwm_geom.h, IWR frame (mm)
+  const pill = (x,y,cls,txt) => { const w = txt.length*6.6+14;
+    return `<rect class="pill" x="${(x-w/2).toFixed(0)}" y="${(y-11).toFixed(0)}" width="${w.toFixed(0)}" height="18" rx="5"/><text class="dt ${cls}" x="${x.toFixed(0)}" y="${(y+2).toFixed(0)}" text-anchor="middle" style="font-size:11px">${txt}</text>`;
   };
-  s += pill(mx, my-26, 'dt', `Dist ${real.dist} mm`);
-  s += pill(mx-90, my+18, 'ax-x', `dX ${real.dx}`);
-  s += pill(mx, my+18, 'ax-y', `dY ${real.dy}`);
-  s += pill(mx+90, my+18, 'ax-z', `dZ ${real.dz}`);
+  let s = `<svg viewBox="0 0 ${innerWidth} ${innerHeight}">`;
+  s += `<text class="dt" x="${(A.x+12).toFixed(0)}" y="${(A.y-6).toFixed(0)}" style="font-size:11px;opacity:.85">CS1 · radar</text>`;
+  s += `<text class="dt" x="${(B.x+12).toFixed(0)}" y="${(B.y+16).toFixed(0)}" style="font-size:11px;opacity:.85">CS2 · UWB</text>`;
+  s += pill(m[0].x + 36, m[0].y - 16, 'ax-x', `dX ${real[0]}`);
+  s += pill(m[1].x - 44, m[1].y - 4, 'ax-y', `dY ${real[1]}`);
+  s += pill(m[2].x + 46, m[2].y, 'ax-z', `dZ ${real[2]}`);
+  s += pill((A.x+B.x)/2 - 78, (A.y+B.y)/2 + 14, 'dt', `Dist ${dist} mm`);
   dimsEl.innerHTML = s + `</svg>`;
 }
 
