@@ -336,6 +336,20 @@ function buildActors(){
   const Z2 = signed(fU.axes[0], down).multiplyScalar(fl('cs2z'));     // long in-plane, down
   const Y2 = new THREE.Vector3().crossVectors(Z2, X2).normalize();    // thin side (right-handed)
   Z2.crossVectors(X2, Y2).normalize();
+  // centre CS2 on the DWM antenna: the small sub-body that pops furthest out of the
+  // flat face, toward the bottom of the board.
+  { let best=-1e9, bc=null; const v=new THREE.Vector3();
+    for (const m of meshes){ if (m.userData.vis!=='uwb') continue;
+      const pos=m.geometry.attributes.position; const step=Math.max(1,Math.floor(pos.count/400));
+      let mxp=-1e9, ce=new THREE.Vector3(), cnt=0;
+      for (let i=0;i<pos.count;i+=step){ v.fromBufferAttribute(pos,i); m.localToWorld(v); ce.add(v); cnt++; mxp=Math.max(mxp, v.clone().sub(fU.center).dot(X2)); }
+      ce.multiplyScalar(1/cnt);
+      const score = mxp + 0.4*ce.clone().sub(fU.center).dot(Z2);   // pops out + toward bottom
+      if (score>best){ best=score; bc=ce; } }
+    if (bc) csB.copy(bc);
+  }
+  // tight box around the two frames for the zoomed-in second perspective
+  boxes.transform = new THREE.Box3().setFromPoints([csA, csB]).expandByScalar(S*0.17);
 
   const gizmo = (origin, X, Y, Z) => {
     const g = new THREE.Group(); g.position.copy(origin);
@@ -425,10 +439,10 @@ function defineChapters(){
       panel:side('control','An ESP32-S3 is the hub brain: USB-host configures the radar, ESP-NN classifies each track as active / unconscious / phantom, and it runs the sweep + compass calibration.','Brain'), dims:null },
 
     // 03 · frame-of-reference transform (gizmos + grid + dims) — iso, zoomed out
-    { r:[0.48,0.56], box:'frame', view:'iso', pan:0.22, fit:2.5, vis:vis({ALL:TRANS, iwr:1, uwb:1}),
+    { r:[0.48,0.56], box:'frame', view:'iso', pan:0.22, fit:2.3, vis:vis({ALL:TRANS, iwr:1, uwb:1}),
       panel:side('frame','Every detection starts in the radar’s frame. SolidWorks-derived offsets plus the live stepper angle transform it into the UWB module’s frame before it leaves the hub.','Radar → UWB'), dims:'transform' },
-    // second perspective: the camera swings a little so the axes' 3-D directions read clearly
-    { r:[0.56,0.64], box:'frame', view:'iso2', pan:0.22, fit:2.5, vis:vis({ALL:TRANS, iwr:1, uwb:1}),
+    // second perspective: swing down (look up) + zoom in tight so the transform is the focus
+    { r:[0.56,0.64], box:'transform', view:'iso2', pan:0.16, fit:1.25, vis:vis({ALL:TRANS, iwr:1, uwb:1}),
       panel:side('frame','A −10° tilt about X separates the two frames. Detections are rotated and offset (−43.18, +13.97, +92.43 mm) into the UWB frame before BLE.','Radar → UWB · second view'), dims:'transform' },
 
     // 04 · responder localization finale (zoom out, phone, waves, lock)

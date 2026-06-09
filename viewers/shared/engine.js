@@ -33,7 +33,7 @@ export const trapUpDown = t => t < 0.5 ? trap(t/0.5) : trap((1-t)/0.5);
 // ---------- camera views ----------
 export const VIEWS = {
   iso:   { dir: new THREE.Vector3(0.85, 0.5, 1.0).normalize(),  up: new THREE.Vector3(0,1,0) },
-  iso2:  { dir: new THREE.Vector3(0.28, 0.58, 1.0).normalize(), up: new THREE.Vector3(0,1,0) }, // gentle swing off iso
+  iso2:  { dir: new THREE.Vector3(0.34, -0.18, 0.90).normalize(), up: new THREE.Vector3(0,1,0) }, // swung around + slightly below (looking up) off iso
   isoL:  { dir: new THREE.Vector3(-0.85, 0.5, 1.0).normalize(), up: new THREE.Vector3(0,1,0) },
   front: { dir: new THREE.Vector3(0.02, 0.08, 1.0).normalize(), up: new THREE.Vector3(0,1,0) },
   back:  { dir: new THREE.Vector3(0.02, 0.08, -1.0).normalize(),up: new THREE.Vector3(0,1,0) },
