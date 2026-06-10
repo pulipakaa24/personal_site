@@ -14,6 +14,12 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// Touch-primary devices (phones/tablets): lighter render budget AND the full-screen
+// fixed canvas must stay pointer-events:none so finger-drags scroll the page through
+// it (on iOS WebKit an interactive viewport-filling fixed element swallows the scroll
+// gesture → the storyboard gets stuck on frame 1). See createStudioScene + DockController.
+export const COARSE = matchMedia('(pointer: coarse)').matches;
+
 // ---------- math ----------
 export const clamp01 = t => Math.max(0, Math.min(1, t));
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -80,8 +86,10 @@ export function buildStudioEnv(renderer){
 // Returns the pieces plus updateHeadlights(camera) to re-aim camera-relative
 // key/fill each frame.
 export function createStudioScene(canvas, opts = {}){
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !COARSE, alpha: true, powerPreference: 'high-performance' });
+  // On phones the full-screen canvas is the heaviest cost: cap DPR lower and skip MSAA
+  // (the remaining supersampling still smooths edges) to keep the storyboard at frame rate.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, COARSE ? 1.5 : 2));
   renderer.setSize(innerWidth, innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = opts.exposure ?? 0.85;
@@ -195,6 +203,32 @@ export const makeSlot = () => ({ pos:new THREE.Vector3(), target:new THREE.Vecto
 // Project a world point to screen pixels (for SVG overlays).
 const _pp = new THREE.Vector3();
 export function projectPoint(camera, v){ _pp.copy(v).project(camera); return { x:(_pp.x*0.5+0.5)*innerWidth, y:(-_pp.y*0.5+0.5)*innerHeight }; }
+
+// ---------- principal-axis analysis (PCA via Jacobi eigen-decomposition) ----------
+// Used by viewers to derive coordinate frames / hinge axes / tube axes from a
+// module's actual geometry. `pca(pts)` returns the centroid + principal axes
+// (sorted by extent, descending) + their extents.
+function eigenSym3(A){
+  A = A.map(r => r.slice()); const V = [[1,0,0],[0,1,0],[0,0,1]];
+  for (let it=0; it<60; it++){
+    let p=0,q=1,mx=Math.abs(A[0][1]);
+    for (const [i,j] of [[0,1],[0,2],[1,2]]) if (Math.abs(A[i][j])>=mx){ mx=Math.abs(A[i][j]); p=i; q=j; }
+    if (mx<1e-12) break;
+    const phi=0.5*Math.atan2(2*A[p][q], A[q][q]-A[p][p]), c=Math.cos(phi), s=Math.sin(phi);
+    for (let k=0;k<3;k++){ const kp=A[k][p],kq=A[k][q]; A[k][p]=c*kp-s*kq; A[k][q]=s*kp+c*kq; }
+    for (let k=0;k<3;k++){ const pk=A[p][k],qk=A[q][k]; A[p][k]=c*pk-s*qk; A[q][k]=s*pk+c*qk; }
+    for (let k=0;k<3;k++){ const vp=V[k][p],vq=V[k][q]; V[k][p]=c*vp-s*vq; V[k][q]=s*vp+c*vq; }
+  }
+  return { vals:[A[0][0],A[1][1],A[2][2]], vecs:[0,1,2].map(j=>new THREE.Vector3(V[0][j],V[1][j],V[2][j])) };
+}
+export function pca(pts){
+  const c = new THREE.Vector3(); pts.forEach(p=>c.add(p)); c.multiplyScalar(1/pts.length);
+  let xx=0,yy=0,zz=0,xy=0,xz=0,yz=0;
+  for (const p of pts){ const dx=p.x-c.x,dy=p.y-c.y,dz=p.z-c.z; xx+=dx*dx;yy+=dy*dy;zz+=dz*dz;xy+=dx*dy;xz+=dx*dz;yz+=dy*dz; }
+  const n=pts.length, e=eigenSym3([[xx/n,xy/n,xz/n],[xy/n,yy/n,yz/n],[xz/n,yz/n,zz/n]]);
+  const idx=[0,1,2].sort((a,b)=>e.vals[b]-e.vals[a]);
+  return { center:c, axes:idx.map(i=>e.vecs[i].clone().normalize()), ext:idx.map(i=>2*Math.sqrt(Math.max(0,e.vals[i]))) };
+}
 
 // ============================================================================
 // Storyboard: data-driven scroll resolver + overlays.
@@ -320,6 +354,129 @@ export class Storyboard {
 
     this.updateOverlays(p, i, c, localT);
     if (this.els.hud) this.els.hud.textContent = Math.round(p * 100) + '%';
+  }
+}
+
+// ============================================================================
+// DockController: the shared "dock-to-case-study" scroll shell.
+//
+// After the storyboard, the fixed canvas lerps into a top-right card and a normal
+// <article id="case"> scrolls in below it. This owns: the scroll -> progress/dockK
+// mapping, the canvas dock lerp (applyDock), the storyboard-overlay fade, and the
+// docked rotisserie camera with a SMOOTH TWO-WAY hand-off to/from the storyboard's
+// settled iso framing. It also wires the #case .reveal IntersectionObserver.
+//
+// Conventions it relies on (shared by every docking viewer): a #spacer that sizes
+// the storyboard scroll; the canvas (#c); overlay ids #title/#panel/#blurb/#dims;
+// #scrollhint/#hint/#hud-progress; an optional #dockhint; and #case .reveal blocks.
+// Per-viewer specifics arrive as hooks:
+//   getBox()            -> Box3 to frame the docked model (e.g. boxes.all)
+//   onStory(shownProg)  -> resolve the storyboard at the smoothed scroll progress
+//   onDockSettle()      -> optional; run each docked frame (e.g. reset part movers)
+//
+// The viewer keeps its own rAF loop (it still owns editor / tuner / render) and just
+// calls dock.update() while the storyboard is active. Read dock.dockK /
+// dock.shownProgress for any viewer-side logic (drag guards, editor re-resolve…).
+//
+// The rotisserie azimuth:  ang = ang0 + wrapPi(spin) * spinKeep
+//   ang0     — the iso azimuth the storyboard settles on (docking in continues from it).
+//   spin     — angle accumulated ONLY when fully docked (eased up from rest).
+//   spinKeep — 1 fully docked, ramping to 0 across the band as dockK -> DOCK_SETTLE,
+//              so scrolling back up returns the model to iso by the SHORTEST path.
+// ============================================================================
+const DOCK_SPIN_SPEED = 0.2;   // rad/s steady spin once fully docked
+const DOCK_FULL = 0.999;       // dockK at/above which the model free-spins
+const DOCK_SETTLE = 0.8;       // ...blending back to the storyboard iso pose down to here
+const wrapPi = a => { a %= 2*Math.PI; if (a > Math.PI) a -= 2*Math.PI; if (a < -Math.PI) a += 2*Math.PI; return a; };
+
+export class DockController {
+  constructor(cfg){
+    this.canvas = cfg.canvas;
+    this.renderer = cfg.renderer;
+    this.camera = cfg.camera;
+    this.spacer = cfg.spacer;
+    this.getBox = cfg.getBox;
+    this.onStory = cfg.onStory || (() => {});
+    this.onDockSettle = cfg.onDockSettle || null;
+    this.overlayIds = cfg.overlayIds || ['title','panel','blurb','dims'];
+    this.card = Object.assign({ w:380, h:280, top:54, right:24 }, cfg.card || {});
+
+    this.progress = 0; this.shownProgress = 0; this.dockK = 0;
+    this._spin = 0; this._spinV = 0; this._lastT = performance.now();
+    this._storyEnd = 1;
+    this._slot = makeSlot(); this._ctr = new THREE.Vector3(); this._off = new THREE.Vector3();
+
+    this.layout();
+    addEventListener('resize', () => this.layout());
+    addEventListener('scroll', () => this._onScroll(), { passive:true });
+    this.observeReveals();
+  }
+
+  layout(){ this._storyEnd = Math.max(1, this.spacer.offsetHeight - innerHeight); }
+
+  _onScroll(){
+    this.progress = clamp01(scrollY / this._storyEnd);
+    const start = this._storyEnd - innerHeight*0.45, span = innerHeight*0.7;   // dock begins just before the article, completes shortly after
+    this.dockK = clamp01((scrollY - start) / span);
+  }
+
+  // lerp the fixed canvas from fullscreen to the top-right card; resize renderer to match
+  applyDock(k){
+    const C = this.card;
+    const cardW = Math.min(C.w, innerWidth - 40), cardH = Math.min(C.h, innerHeight * 0.34),
+          cardTop = C.top, cardRight = Math.min(C.right, innerWidth*0.04);
+    const ke = ease(k);
+    const w = lerp(innerWidth, cardW, ke), h = lerp(innerHeight, cardH, ke);
+    const top = lerp(0, cardTop, ke), right = lerp(0, cardRight, ke);
+    const cv = this.canvas;
+    const dh = document.getElementById('dockhint'); if (dh) dh.style.top = (cardTop + cardH + 8) + 'px';
+    cv.style.width = w+'px'; cv.style.height = h+'px';
+    cv.style.top = top+'px'; cv.style.right = right+'px'; cv.style.left = 'auto';
+    cv.classList.toggle('docked', k > 0.02);
+    // On touch devices keep the canvas non-interactive so drags scroll the page through it.
+    cv.style.pointerEvents = (COARSE || k > 0.5) ? 'none' : 'auto';
+    this.renderer.setSize(w, h, false); this.camera.aspect = w/h; this.camera.updateProjectionMatrix();
+    const disp = (id, hide) => { const el = document.getElementById(id); if (el) el.style.display = hide ? 'none' : ''; };
+    disp('scrollhint', k>0.03); disp('hint', k>0.03);
+    if (dh) dh.style.opacity = (k>0.85 ? 0.55 : 0);
+    const hp = document.getElementById('hud-progress'); if (hp) hp.style.opacity = k>0.4 ? 0 : 0.7;
+  }
+
+  // one storyboard-active frame: smooth scroll, dock the canvas, run storyboard or the
+  // docked rotisserie, then fade the storyboard overlays out as the model docks.
+  update(){
+    const now = performance.now(), dt = Math.min(0.05, (now - this._lastT)/1000); this._lastT = now;
+    this.shownProgress += (this.progress - this.shownProgress) * 0.12;
+    this.applyDock(this.dockK);
+    if (this.dockK < DOCK_SETTLE){
+      this.onStory(this.shownProgress);
+      this._spin = 0; this._spinV = 0;          // reset so the next dock restarts from the iso azimuth
+    } else {
+      if (this.onDockSettle) this.onDockSettle();
+      if (this.dockK >= DOCK_FULL){
+        this._spinV += (DOCK_SPIN_SPEED - this._spinV) * 0.03;   // ease the spin speed up from rest
+        this._spin += this._spinV * dt;
+      }
+      const cam = this.camera, b = this.getBox(); b.getCenter(this._ctr);
+      frameCamera(cam, b, 'iso', 0, 2.0, this._slot);
+      this._off.copy(this._slot.pos).sub(this._slot.target);
+      const r = Math.hypot(this._off.x, this._off.z);
+      const ang0 = Math.atan2(this._off.z, this._off.x);         // azimuth of the settled iso view
+      const spinKeep = smoothstep(clamp01((this.dockK - DOCK_SETTLE) / (DOCK_FULL - DOCK_SETTLE)));
+      const ang = ang0 + wrapPi(this._spin) * spinKeep;          // shortest-path return to iso
+      cam.position.set(this._ctr.x + r*Math.cos(ang), this._slot.pos.y, this._ctr.z + r*Math.sin(ang));
+      cam.up.set(0,1,0); cam.lookAt(this._ctr);
+    }
+    const od = 1 - smoothstep(this.dockK);
+    for (const id of this.overlayIds){ const el = document.getElementById(id); if (el) el.style.opacity = ((parseFloat(el.style.opacity)||0) * od).toFixed(3); }
+  }
+
+  // reveal-on-scroll for the case-study write-up (mirrors assets/project.js)
+  observeReveals(){
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries){ if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } }
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    document.querySelectorAll('#case .reveal').forEach(el => io.observe(el));
   }
 }
 

@@ -121,10 +121,15 @@ DIFFERENT content types equally — not every page is a 3D scroll experience):
 ## 5. The shared 3D viewer framework (`viewers/shared/`)
 
 This is the heart of the interactive work. To build a new viewer, **copy `viewers/rescuevision/index.html`
-as the template** and swap the GLB + `classify()` + `chapters`.
+as the template** and swap the GLB + `classify()` + `chapters`. A docking viewer also creates a
+**`DockController`** (below) in `start()` and calls `dock.update()` from its `tick()` loop — that's the
+whole dock-to-case-study shell; you no longer hand-roll `applyDock`/scroll-mapping/reveal-observer per viewer.
 
 ### `engine.js` (ES module) exports:
 - **Math:** `clamp01, lerp, smoothstep, ease (easeInOutCubic), trap, trapUpDown`.
+- **`pca(pts)`** — PCA via Jacobi eigen-decomposition (shared by the coordinate-frame / hinge / tube-axis
+  derivations); returns `{center, axes (sorted by extent desc), ext}`. *(Was duplicated inline in both
+  viewers as `eigenSym3`+local PCA — centralized 2026-06-10.)*
 - **`VIEWS`** — named camera directions (unit `dir` + `up`):
   - `iso` `(0.85,0.5,1.0)` — the default 3/4 view.
   - `iso2` `(0.34,-0.18,0.90)` — swung around and **slightly below, looking up** (RescueVision's
@@ -139,6 +144,17 @@ as the template** and swap the GLB + `classify()` + `chapters`.
 - **`centerModel, setOpacity` (depthWrite-on, avoids X-ray), `makeVis(VG)`, `frameCamera`, `projectPoint`.**
 - **`Storyboard`** — the data-driven scroll engine. You give it `chapters[]`; it resolves the current
   scroll progress to a camera framing + opacities + overlays each frame.
+- **`DockController`** — the shared **dock-to-case-study shell** (extracted 2026-06-10; was duplicated in
+  both viewers). Owns: the scroll→`progress`/`dockK` mapping + `layout()`; the canvas dock lerp
+  (`applyDock`); the storyboard-overlay fade; the `#case .reveal` IntersectionObserver; and the **docked
+  rotisserie with the smooth two-way hand-off** (the `ang0 + wrapPi(spin)*spinKeep` orbit — see §7).
+  Construct in `start()` with `{ canvas, renderer, camera, spacer, getBox:()=>boxes.all,
+  onStory:(p)=>story.resolve(p), onDockSettle? }` (`onDockSettle` runs every docked frame — SmartPT uses it
+  to reset the brace to the assembled pose). The viewer keeps its own `tick()` (editor/tuner/render) and
+  just calls `dock.update()` while the storyboard is active; read `dock.dockK`/`dock.shownProgress` for any
+  viewer-side logic (drag guards, editor re-resolve). Relies on the standard ids (`#c`, `#spacer`,
+  `#title/#panel/#blurb/#dims`, `#scrollhint/#hint/#hud-progress`, optional `#dockhint`). The docked-card
+  CSS (`#c.docked`, `#dockhint`) lives in `viewer.css`. Guadaloop opts out (no dock — never creates one).
 
 ### The `Storyboard` chapter model
 Each chapter is an object:
@@ -225,6 +241,27 @@ Never claim a visual change works without rendering it. Three.js viewers need HT
      `uwb.cjs` (UWB sub-mesh inspection), `errcheck.cjs` (console errors), `bodytest.cjs`, `edcheck.cjs`.
 
 Node is v26. This loop was used to read live three.js material state and tune every storyboard beat.
+
+### Mobile / iPhone verification (added 2026-06-10)
+Three complementary loops — pick by what you're testing:
+1. **iPhone-viewport (Chrome / puppeteer)** — `/private/tmp/iphone.cjs <urlPath> <outPrefix> <fracs>`. Reuses
+   the puppeteer-core+Chrome harness with `page.emulate({viewport:{390×844, isMobile, hasTouch}})`. Fast and
+   scriptable; drives the storyboard via `scrollTo`. **Use for** mobile **layout + perf + per-frame** render
+   checks + console health. **Does NOT** reproduce Safari's scroll quirk (Chrome lacks it).
+2. **Real iOS Simulator (authentic Mobile Safari / WebKit)** — `xcrun simctl list devices available | grep
+   iPhone`; boot `xcrun simctl boot <udid>` + `open -a Simulator`; the sim shares the host network so load
+   `xcrun simctl openurl booted http://localhost:8100/...`; capture `xcrun simctl io booted screenshot out.png`.
+   **Gold standard for rendering/layout on true iOS.** **Caveat — can't script touch gestures:** synthetic
+   host input needs macOS Accessibility (TCC) which can't be granted programmatically — `cliclick` is blocked,
+   and `idb` needs the dead `facebook/fb` brew tap. So you only see **frame 1** unless the user grants
+   Accessibility to the terminal (then `cliclick` click-drags on the sim window become real touches) or tests
+   on a physical iPhone.
+3. **Real WebKit hit-test (Playwright webkit)** — `/private/tmp/wk_hittest.cjs`. Runs the actual Safari engine
+   headless; A/Bs `document.elementFromPoint(centerX,centerY)` with the canvas `pointer-events` forced
+   `auto` (OLD) vs as-shipped (FIXED). This proves the **exact causal mechanism** of the scroll bug + the fix
+   on the real engine without needing a touch gesture (a native touch-pan can't be script-driven in any
+   engine — synthetic touch events don't trigger native scrolling). Playwright+webkit live in `/private/tmp`
+   (`npm i playwright` + `npx playwright install webkit`).
 
 ---
 
@@ -401,6 +438,12 @@ coursework, skills, contact/footer.
 - **Physical accuracy comes from source, not the marketing image:** firmware headers (`dwm_geom.h`) and
   measured PCA beat a possibly-inverted SolidWorks screenshot. When the user cites exact axis directions
   or values, those win — honor them literally.
+- **iOS scroll-eating fixed canvas:** a viewport-filling `position:fixed` element with `pointer-events:auto`
+  swallows the touch-scroll gesture on **iOS WebKit** (the page won't scroll behind it; desktop wheel-scroll
+  is unaffected, so the bug hides until you test on a phone). Keep `#c` `pointer-events:none` on touch
+  devices — the exported `COARSE` const (`matchMedia('(pointer:coarse)')`) in `engine.js` gates this *and*
+  the mobile render budget (no MSAA, DPR≤1.5). Re-enable canvas pointer-events only where needed
+  (`body.editing #c`, or `applyDock`'s `!COARSE` branch for the desktop phone-drag).
 - **Verify visually** before declaring a visual change done (§6). Poll `#hud-progress` before shooting.
 - **Clean up debug handles** before finishing (`window.__rv`, `__editor`, `__debug`) — grep to confirm.
 - **Hash overrides** are the live-tuning mechanism for things awaiting the user's eye (`#rx/#ry/#rz`,
@@ -432,6 +475,35 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-10** — **Mobile pass: fixed the iOS "stuck on frame 1" scroll bug + perf + layout.**
+  **Root cause (all three viewers):** the full-screen `position:fixed` `#c` canvas was `pointer-events:auto`
+  during the storyboard (CSS default for guadaloop; `DockController.applyDock` forces `auto` while `k≈0` for
+  rescuevision/smartpt). On iOS WebKit a finger-press lands on that viewport-filling **interactive** fixed
+  canvas, which isn't itself scrollable, so the document never scrolls → `scrollY` stays 0 → storyboard
+  frozen on frame 1. Desktop was unaffected (wheel-scroll ignores `pointer-events`), which hid the bug.
+  **Fix:** `#c` is now `pointer-events:none` by default (`viewer.css`), with `body.editing #c{pointer-events:auto}`
+  for the editors (OrbitControls / part-picking); `applyDock` sets `(COARSE || k>0.5) ? 'none':'auto'` so
+  desktop keeps the RescueVision finale phone-drag while **touch devices always let the page scroll through
+  the canvas**. **Perf:** new exported const `COARSE = matchMedia('(pointer:coarse)').matches` in `engine.js`;
+  on coarse devices the renderer drops MSAA (`antialias:!COARSE`), caps DPR at 1.5 (vs 2), and asks
+  `powerPreference:'high-performance'`. **Layout:** added a `@media (max-width:640px)` block to `viewer.css`
+  — the right-rail `#panel`/`#blurb` span full width (still right-aligned) instead of a crushed ~150px column,
+  the long nav `.lbl` is hidden, `#dockhint` no longer overflows. **Verified three ways (see §6):** a
+  real-WebKit hit-test A/B (Playwright webkit) proving the center-press hits `#c` OLD vs `body`/`#spacer`
+  FIXED on all three; the iPhone-viewport puppeteer harness (storyboard drives, no console errors, mobile
+  layout); and an authentic iOS-Simulator Safari screenshot of the fixed build. *(Open polish: on a narrow
+  phone the `pan` slides the model partly off the left edge — could scale `pan` down on `COARSE`.)*
+- **2026-06-10** — **Shared the dock shell (DRY refactor).** Extracted the duplicated "viewer shell" out of
+  rescuevision + smartpt into `viewers/shared/`: (1) a **`DockController`** class in `engine.js` owning the
+  scroll→`progress`/`dockK` mapping, `applyDock`, the overlay fade, the `#case .reveal` observer, and the
+  docked rotisserie + smooth two-way hand-off (see §5 + §7); viewers now just `dock = new DockController({…})`
+  in `start()` and call `dock.update()` in `tick()`. (2) **`pca(pts)`** (+ private `eigenSym3`) moved to
+  `engine.js` — both viewers' inline copies removed (RescueVision's `analyzeGroup` now wraps `pca`; SmartPT
+  imports it). (3) Docked-card CSS (`#c.docked`, `#dockhint`) moved to `viewer.css`. Viewers dropped ~95
+  lines each (684→587, 726→634); the dock logic now lives once and BlindMaster (#3) inherits it for free.
+  Guadaloop is unaffected (it has no dock — never constructs a DockController). Verified: all three viewers
+  load with no console errors; both dock correctly (`canvas.docked=true`); docked-window occlusion + framing
+  unchanged in headless renders.
 - **2026-06-10** — **Docked-card polish (RescueVision + SmartPT).** Two fixes to the top-right
   floating model card after the case study begins. (1) **Opaque floating window:** `#c.docked` now has
   an opaque background (`#0a0b0e`) and `z-index:6` (above `#case`'s `z-index:5`), so the opaque **Status**
@@ -561,6 +633,11 @@ Newest first. Append an entry whenever you ship something.
   hinge-flexion stage with the two IMUs tracking the knee angle + a bending leg silhouette, then dock to
   the case study. *(Done 2026-06-09 — see §17. Open polish items there await the user's steer on the
   device's natural pose / flex viewing angle.)*
+- ✅ **Make the site perform well on mobile** + fix the iOS Safari bug where the viewers were "stuck on the
+  first storyboard frame" (couldn't scroll), and set up an iPhone test loop. *(Done 2026-06-10 — root cause
+  was the interactive full-screen fixed canvas eating the touch-scroll gesture on iOS WebKit; fixed with
+  canvas `pointer-events:none` on touch devices, plus a coarse-pointer render budget and a
+  `@media(max-width:640px)` viewer layout. iPhone/iOS-sim/real-WebKit verification loops documented in §6.)*
 - 🔄 **Confirm the coordinate-axis out-sign combo** (`#cs1y/#cs1z/#cs2x/#cs2z`) so it can be baked as
   default and the hash dropped. *(Awaiting the user's eyes on the clearer second view.)*
 - ⬜ Build the **BlindMaster** viewer (`servobox.glb`). Framework is ready; copy the RescueVision template.
@@ -582,6 +659,12 @@ Newest first. Append an entry whenever you ship something.
    for the abstract-placeholder project pages.
 5. Possible CS2 antenna-centering refinement toward the bottom-**right** corner if the user wants it
    tighter than bottom-center.
+6. **Mobile polish (optional, after on-device pass):** on a narrow phone the storyboard `pan` slides the
+   model partly off the left edge — scale `pan` down when `COARSE`. Consider `100dvh` for `#c`/`#spacer` so
+   the iOS address-bar resize doesn't jump the canvas. If the RescueVision finale phone-drag is wanted on
+   mobile, give the canvas `touch-action:pan-y` + re-enable pointer-events only in the finale (so vertical
+   scroll still works). The scroll/perf/layout fix itself is **verified in real WebKit + iOS Simulator**, but
+   the literal finger-swipe still wants a quick **on-device confirm** (synthetic touch isn't scriptable here).
 
 ---
 

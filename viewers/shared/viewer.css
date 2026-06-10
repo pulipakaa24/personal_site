@@ -18,8 +18,14 @@ body {
 }
 body.editing { height: 100vh !important; overflow: hidden; }   /* lock scroll in editor mode */
 
-/* The WebGL canvas. Pages may wrap it to dock it into a corner later. */
-#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 1; }
+/* The WebGL canvas. Pages may wrap it to dock it into a corner later.
+   pointer-events:none by default so finger-drags scroll the page through this
+   viewport-filling fixed element (else iOS Safari swallows the scroll gesture and
+   the storyboard sticks on frame 1). Desktop viewers that need canvas interaction
+   (RescueVision phone-drag) re-enable it inline via DockController on fine pointers;
+   guadaloop's grouping editor re-enables it below. */
+#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 1; pointer-events: none; }
+body.editing #c { pointer-events: auto; }   /* OrbitControls in the editor */
 
 /* ---- Hero title — upper-left; the model overlaps its lower half ---- */
 #title {
@@ -75,6 +81,15 @@ body.editing { height: 100vh !important; overflow: hidden; }   /* lock scroll in
 }
 #loader.hidden { opacity: 0; pointer-events: none; }
 
+/* ---- docked viewer card (DockController lerps the canvas into this top-right card
+   as the storyboard ends, where it sits as an OPAQUE floating window ABOVE the
+   case study (z>#case) so page content scrolls cleanly behind it) ---- */
+#c.docked { border: 1px solid rgba(255,255,255,.14); border-radius: 14px;
+            box-shadow: 0 24px 60px rgba(0,0,0,.6); background: #0a0b0e; z-index: 6; }
+#dockhint { position: fixed; z-index: 6; top: 344px; right: 24px; width: 380px; text-align: center;
+            font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,.4);
+            opacity: 0; pointer-events: none; transition: opacity .3s; }
+
 /* ---- site theme: top nav (ties each viewer back to the main site) ---- */
 nav { position: fixed; top: 0; left: 0; right: 0; z-index: 8;
       display: flex; align-items: center; justify-content: space-between;
@@ -109,3 +124,17 @@ body.editing #panel, body.editing #blurb, body.editing #dims { display: none; }
 #dump { position: fixed; inset: 10% 15%; z-index: 7; display:none; background:#0c0c0c; border:1px solid #333; border-radius:12px; padding:16px; }
 #dump textarea { width:100%; height: calc(100% - 40px); background:#000; color:#9f9; border:1px solid #333; border-radius:8px; font-family: monospace; font-size:12px; padding:10px; resize:none;}
 #dump .x { float:right; cursor:pointer; pointer-events:auto; }
+
+/* ---- phones / narrow screens: the model pans left, so let the right-rail panel &
+   blurb use the full width (still right-aligned) instead of a crushed ~150px column,
+   slim the nav, and keep the dock hint from overflowing the viewport. ---- */
+@media (max-width: 640px){
+  nav { padding: 12px 14px; }
+  nav .brand { font-size: 12px; }
+  nav .lbl { display: none; }
+  #title { padding: 12vh 0 0 6vw; }
+  #panel { top: 12vh; left: 5vw; right: 5vw; max-width: none; }
+  #panel h2 { font-size: clamp(30px, 9vw, 52px); }
+  #blurb { bottom: 11vh; left: 5vw; right: 5vw; max-width: none; font-size: 13.5px; }
+  #dockhint { left: 14px; right: 14px; width: auto; }
+}

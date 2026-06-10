@@ -13,17 +13,11 @@
   /* storyboard scroll length (the fixed canvas plays through this height) */
   #spacer { height: 1150vh; }
 
-  /* docked viewer card frame (faded in as the model docks to the corner).
-     OPAQUE background + z-index above #case (z5) so it reads as a solid floating
-     window: the Status fact cell + "how it works" cards scroll cleanly BEHIND it
-     instead of clashing over the model. */
-  #c.docked { border:1px solid rgba(255,255,255,.14); border-radius:14px;
-              box-shadow:0 24px 60px rgba(0,0,0,.6); background:#0a0b0e; z-index:6; }
-
-  /* ---- case study (normal flow, scrolls in after the storyboard docks) ----
+  /* The docked card (#c.docked) + #dockhint styles are shared — see viewer.css.
+     ---- case study (normal flow, scrolls in after the storyboard docks) ----
      Styling comes from project.css (.wrap/.facts/.block/.dives/.soon/footer);
-     only the bits unique to the docked-viewer context live here. The article
-     stays transparent so the docked model card shows through its top-right. */
+     only the bits unique to the docked-viewer context live here. #case sits at
+     z5, BELOW the opaque docked card (z6), so content scrolls behind the card. */
   #case { position: relative; z-index: 5; padding: 15vh 0 4vh; }
   #case .award { display:inline-block; border:1px solid var(--accent); color:var(--accent);
                  border-radius:999px; padding:6px 14px; font-size:12px; letter-spacing:.12em;
@@ -34,7 +28,6 @@
   #case .dive ul { list-style:none; margin-top:2px }
   #case .dive li { font-size:14px; color:var(--muted); line-height:1.5; padding:5px 0 5px 16px; position:relative }
   #case .dive li::before { content:"›"; position:absolute; left:0; color:var(--accent); font-weight:800 }
-  #dockhint { position:fixed; z-index:6; top:344px; right:24px; width:380px; text-align:center; font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.4); opacity:0; pointer-events:none; transition:opacity .3s; }
 </style>
 <script type="importmap">
 {
@@ -145,7 +138,7 @@
 <script type="module">
 import {
   createStudioScene, loadGLB, prepareMeshes, centerModel, setOpacity,
-  frameCamera, makeVis, Storyboard, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, THREE
+  frameCamera, makeVis, Storyboard, DockController, pca, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, THREE
 } from '../shared/engine.js';
 import { AppearanceEditor, applyAppearance } from '../shared/appearance.js';
 
@@ -184,8 +177,7 @@ let meshes = [], chapters = [], story = null, editor = null;
 const boxes = {};
 const centers = {};
 let S = 1;                          // model size scale
-let progress = 0, shownProgress = 0;
-let dockK = 0;                      // 0 = fullscreen storyboard, 1 = corner card
+let dock = null;                    // shared DockController (scroll map + dock + rotisserie)
 const dimsEl = document.getElementById('dims');
 
 // actors built after load
@@ -274,43 +266,31 @@ async function start(){
 
   editor = new AppearanceEditor({
     renderer, scene, camera, controls, meshes, boxes,
-    toggleKey:'g', initial: APPEARANCE, onAfter: () => story.resolve(shownProgress)
+    toggleKey:'g', initial: APPEARANCE, onAfter: () => story.resolve(dock.shownProgress)
   });
   document.getElementById('dumpClose').addEventListener('click', () => document.getElementById('dump').style.display='none');
 
+  // shared dock-to-case-study shell (scroll map, canvas dock, smooth rotisserie hand-off)
+  dock = new DockController({
+    canvas, renderer, camera, spacer: document.getElementById('spacer'),
+    getBox: () => boxes.all, onStory: (p) => story.resolve(p)
+  });
+
   controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
-  layout(); story.resolve(0);
+  story.resolve(0);
   document.getElementById('loader').classList.add('hidden');
 }
 
 // ---------- principal-axis analysis (for the real coordinate frames) ----------
-// Jacobi eigen-decomposition of a symmetric 3x3 (rows as arrays).
-function eigenSym3(A){
-  A = A.map(r => r.slice()); const V = [[1,0,0],[0,1,0],[0,0,1]];
-  for (let it=0; it<60; it++){
-    let p=0,q=1,mx=Math.abs(A[0][1]);
-    for (const [i,j] of [[0,1],[0,2],[1,2]]) if (Math.abs(A[i][j])>=mx){ mx=Math.abs(A[i][j]); p=i; q=j; }
-    if (mx<1e-12) break;
-    const phi=0.5*Math.atan2(2*A[p][q], A[q][q]-A[p][p]), c=Math.cos(phi), s=Math.sin(phi);
-    for (let k=0;k<3;k++){ const kp=A[k][p],kq=A[k][q]; A[k][p]=c*kp-s*kq; A[k][q]=s*kp+c*kq; }
-    for (let k=0;k<3;k++){ const pk=A[p][k],qk=A[q][k]; A[p][k]=c*pk-s*qk; A[q][k]=s*pk+c*qk; }
-    for (let k=0;k<3;k++){ const vp=V[k][p],vq=V[k][q]; V[k][p]=c*vp-s*vq; V[k][q]=s*vp+c*vq; }
-  }
-  return { vals:[A[0][0],A[1][1],A[2][2]], vecs:[0,1,2].map(j=>new THREE.Vector3(V[0][j],V[1][j],V[2][j])) };
-}
-// World-space principal axes of a vis-group: axes sorted by extent (desc) + the
-// sampled points (so callers can locate features like the antenna bump).
+// World-space principal axes of a vis-group: PCA (shared engine helper) over sampled
+// world verts; returns axes sorted by extent (desc) + the sampled points (so callers
+// can locate features like the antenna bump).
 function analyzeGroup(group){
   const pts=[]; const v=new THREE.Vector3();
   for (const m of meshes){ if (m.userData.vis!==group) continue; const pos=m.geometry.attributes.position;
     const step=Math.max(1, Math.floor(pos.count/2500));
     for (let i=0;i<pos.count;i+=step){ v.fromBufferAttribute(pos,i); m.localToWorld(v); pts.push(v.clone()); } }
-  const c=new THREE.Vector3(); pts.forEach(p=>c.add(p)); c.multiplyScalar(1/pts.length);
-  let xx=0,yy=0,zz=0,xy=0,xz=0,yz=0;
-  for (const p of pts){ const dx=p.x-c.x,dy=p.y-c.y,dz=p.z-c.z; xx+=dx*dx;yy+=dy*dy;zz+=dz*dz;xy+=dx*dy;xz+=dx*dz;yz+=dy*dz; }
-  const n=pts.length, e=eigenSym3([[xx/n,xy/n,xz/n],[xy/n,yy/n,yz/n],[xz/n,yz/n,zz/n]]);
-  const idx=[0,1,2].sort((a,b)=>e.vals[b]-e.vals[a]);
-  return { center:c, axes:idx.map(i=>e.vecs[i].normalize()), ext:idx.map(i=>2*Math.sqrt(Math.max(0,e.vals[i]))), pts };
+  return { ...pca(pts), pts };
 }
 
 // ---------- finale actors: ground grid, coord-frame gizmos, UWB waves, phone, link ----------
@@ -565,7 +545,7 @@ let phoneManual = false, dragging = false;
 const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
 const dragPlane = new THREE.Plane();
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (!actors || editor?.on || dockK > 0.05) return;
+  if (!actors || !dock || editor?.on || dock.dockK > 0.05) return;
   const c = chapters[curIndex()]; if (!c || !c.finale) return;
   setPtr(e); ray.setFromCamera(ptr, camera);
   if (ray.intersectObject(actors.phone, true).length){
@@ -588,97 +568,20 @@ renderer.domElement.addEventListener('pointermove', (e) => {
 });
 addEventListener('pointerup', (e) => { if (dragging){ dragging = false; document.body.style.cursor=''; } });
 function setPtr(e){ const r = renderer.domElement.getBoundingClientRect(); ptr.x = ((e.clientX-r.left)/r.width)*2-1; ptr.y = -((e.clientY-r.top)/r.height)*2+1; }
-function curIndex(){ let i = chapters.findIndex(c => shownProgress <= c.r[1]); return i<0 ? chapters.length-1 : i; }
-
-// ---------- scroll mapping + dock ----------
-const spacer = document.getElementById('spacer');
-let storyEnd = 1;
-function layout(){ storyEnd = Math.max(1, spacer.offsetHeight - innerHeight); }
-addEventListener('resize', layout);
-addEventListener('scroll', () => {
-  progress = clamp01(scrollY / storyEnd);
-  // dock factor: begins just before the article arrives, completes shortly after
-  const start = storyEnd - innerHeight*0.45, span = innerHeight*0.7;
-  dockK = clamp01((scrollY - start) / span);
-}, { passive:true });
-
-// lerp the fixed canvas from fullscreen to a top-right card; resize renderer to match
-function applyDock(k){
-  const cardW = Math.min(380, innerWidth - 40), cardH = Math.min(280, innerHeight * 0.34), cardTop = 54, cardRight = Math.min(24, innerWidth*0.04);
-  const ke = ease(k);
-  const w = lerp(innerWidth, cardW, ke), h = lerp(innerHeight, cardH, ke);
-  const top = lerp(0, cardTop, ke), right = lerp(0, cardRight, ke);
-  const dh = document.getElementById('dockhint'); if (dh) dh.style.top = (cardTop + cardH + 8) + 'px';
-  canvas.style.width = w+'px'; canvas.style.height = h+'px';
-  canvas.style.top = top+'px'; canvas.style.right = right+'px'; canvas.style.left = 'auto';
-  canvas.classList.toggle('docked', k > 0.02);
-  canvas.style.pointerEvents = k > 0.5 ? 'none' : 'auto';
-  renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
-  // HUD / hints
-  document.getElementById('scrollhint').style.display = k>0.03?'none':'';
-  document.getElementById('hint').style.display = k>0.03?'none':'';
-  document.getElementById('dockhint').style.opacity = (k>0.85 ? 0.55 : 0);
-  document.getElementById('hud-progress').style.opacity = k>0.4?0:0.7;
-}
+function curIndex(){ let i = chapters.findIndex(c => dock.shownProgress <= c.r[1]); return i<0 ? chapters.length-1 : i; }
 
 // ---------- loop ----------
-// Docked auto-rotate ("rotisserie") with a smooth two-way hand-off to the scroll-driven
-// storyboard. The orbit is an azimuth around the model:  ang = ang0 + wrapPi(dockSpin)*spinKeep
-//   • ang0      — the iso azimuth the storyboard settles on.
-//   • dockSpin  — angle accumulated while FULLY docked (free rotisserie).
-//   • spinKeep  — 1 when fully docked, ramping to 0 across the transition band as dockK
-//                 falls to DOCK_SETTLE; so scrolling back UP rotates the model from wherever
-//                 the carousel is, by the SHORTEST path (wrapPi), back to the iso framing —
-//                 purely as a function of scroll position in that band (no jolt either way).
-let dockSpin = 0, dockSpinV = 0, lastFrameT = performance.now();
-const DOCK_SPIN_SPEED = 0.2;     // rad/s steady spin once fully docked
-const DOCK_FULL = 0.999;         // dockK at/above which the model free-spins
-const DOCK_SETTLE = 0.8;         // ...blending back to the storyboard iso pose down to here
-const wrapPi = a => { a %= 2*Math.PI; if (a > Math.PI) a -= 2*Math.PI; if (a < -Math.PI) a += 2*Math.PI; return a; };
-const _dockSlot = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() };
-const _dockCtr = new THREE.Vector3(), _dockOff = new THREE.Vector3();
+// The shared DockController (created in start()) owns the scroll→dock mapping, the
+// canvas dock lerp, the overlay fade, the #case reveal observer, and the docked
+// rotisserie with its smooth two-way hand-off. The loop just drives editor vs dock.
 function tick(){
   requestAnimationFrame(tick);
-  const now = performance.now(), dt = Math.min(0.05, (now - lastFrameT)/1000); lastFrameT = now;
   if (editor && editor.on){ controls.update(); }
-  else if (story){
-    shownProgress += (progress - shownProgress) * 0.12;
-    applyDock(dockK);
-    if (dockK < DOCK_SETTLE){
-      story.resolve(shownProgress);
-      dockSpin = 0; dockSpinV = 0;          // reset so the next dock restarts from the iso azimuth
-    } else {
-      // Docked or within the transition band: drive the rotisserie orbit. Accumulate spin
-      // only when FULLY docked; in the band freeze it and blend it out via spinKeep so the
-      // model rotates fluidly back to the iso framing as you scroll up.
-      if (dockK >= DOCK_FULL){
-        dockSpinV += (DOCK_SPIN_SPEED - dockSpinV) * 0.03;   // ease the spin speed up from rest
-        dockSpin += dockSpinV * dt;
-      }
-      const b = boxes.all; b.getCenter(_dockCtr);
-      frameCamera(camera, b, 'iso', 0, 2.0, _dockSlot);
-      _dockOff.copy(_dockSlot.pos).sub(_dockSlot.target);
-      const r = Math.hypot(_dockOff.x, _dockOff.z);
-      const ang0 = Math.atan2(_dockOff.z, _dockOff.x);       // azimuth of the settled iso view
-      const spinKeep = smoothstep(clamp01((dockK - DOCK_SETTLE) / (DOCK_FULL - DOCK_SETTLE)));
-      const ang = ang0 + wrapPi(dockSpin) * spinKeep;        // shortest-path return to iso
-      camera.position.set(_dockCtr.x + r*Math.cos(ang), _dockSlot.pos.y, _dockCtr.z + r*Math.sin(ang));
-      camera.up.set(0,1,0); camera.lookAt(_dockCtr);
-    }
-    // fade all storyboard overlays out as the model docks
-    const od = 1 - smoothstep(dockK);
-    for (const id of ['title','panel','blurb','dims']){ const el = document.getElementById(id); if (el) el.style.opacity = ((parseFloat(el.style.opacity)||0) * od).toFixed(3); }
-  }
+  else if (story && dock){ dock.update(); }
   updateHeadlights();
   renderer.render(scene, camera);
 }
 tick();
-
-// reveal-on-scroll for the case-study write-up (mirrors assets/project.js)
-const _io = new IntersectionObserver((entries) => {
-  for (const e of entries){ if (e.isIntersecting){ e.target.classList.add('in'); _io.unobserve(e.target); } }
-}, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
-document.querySelectorAll('#case .reveal').forEach(el => _io.observe(el));
 </script>
 </body>
 </html>
