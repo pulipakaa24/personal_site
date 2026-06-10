@@ -170,8 +170,10 @@ const TRANS = 0.18;
 function classify(o){
   let names = [], n = o; while (n){ if (n.name) names.push(n.name); n = n.parent; }
   const p = names.join('/').replace(/[^a-z0-9]/gi,'').toLowerCase();
-  if (/mesh0/.test(p)) return 'imu1';
-  if (/mesh3/.test(p)) return 'imu2';
+  // key off the MPU assembly group name (survives mesh_N renumbering on re-export):
+  // the duplicate IMU is "MPU_6050step_1" -> compacts to "...step1...".
+  if (/mpu6050step1/.test(p)) return 'imu2';
+  if (/mpu6050step/.test(p))  return 'imu1';
   if (/upperleg/.test(p)) return 'upper';
   if (/lowerleg/.test(p)) return 'lower';
   return 'other';
@@ -191,11 +193,17 @@ let progress = 0, shownProgress = 0;
 let dockK = 0;
 const dimsEl = document.getElementById('dims');
 let actors = null;
+let actors_imuBind = null;
 let tuneMode = false;
 
-// motion tuning
-const THETA = 58 * Math.PI/180;        // peak knee-flexion shown
-let   explodeDist = 0.32;              // along the tube axis (set to S*… at load)
+// motion tuning (hash-tunable)
+const _hpM = new URLSearchParams(location.hash.slice(1));
+// "Two halves" reveal: the upper (thigh) shell swings open on the hinge to ~BIG_ANGLE
+let BIG_ANGLE = (_hpM.has('bigangle') ? +_hpM.get('bigangle') : 160) * Math.PI/180;
+// "Tracking" segment: small back-and-forth amplitude around the held reveal pose
+let TRACK_AMP = (_hpM.has('trackamp') ? +_hpM.get('trackamp') : 38) * Math.PI/180;
+// sign of the hinge rotation (so it swings BACK-and-up, not front-and-down)
+let ROT_SIGN  = (_hpM.has('rotsign') ? Math.sign(+_hpM.get('rotsign')) : -1) || -1;
 
 // ---------- load ----------
 let APPEARANCE = null;
@@ -216,11 +224,9 @@ async function start(){
   for (const o of meshes) o.userData.vis = classify(o);
 
   // ---- hash-tunable parameters ----
-  // #rot=rx,ry,rz       — override the WHOLE model orientation (Euler XYZ degrees)
-  // #inner=tube,hinge   — rotate the inner body (LowerLeg + IMU2) in degrees:
-  //                        tube  = around the bore axis (through the cuff openings)
-  //                        hinge = around the hinge-pin axis
-  // #tune               — opens the interactive orientation tuner
+  // #rot=rx,ry,rz   — override the WHOLE model orientation (Euler XYZ degrees)
+  // #imuflip=deg    — degrees to seat the upper-shell IMU in its slot (default below)
+  // #tune           — opens the interactive orientation tuner
   const hp = new URLSearchParams(location.hash.slice(1));
 
   // ---- orientation (runs FIRST on unmodified geometry for stable results) ----
@@ -233,18 +239,10 @@ async function start(){
   }
   model.updateMatrixWorld(true);
 
-  // ---- upper-body rotation (baked: 180° around tube axis) ----
-  // Override via #inner=tube,hinge (degrees). Default is 180,0.
-  {
-    const r = hp.has('inner') ? hp.get('inner').split(',').map(Number) : [180, 0];
-    flipInner(model, r[0]||0, r[1]||0);
-  }
-
   centerModel(model, scene);
 
   boxes.all = new THREE.Box3(); meshes.forEach(m => boxes.all.expandByObject(m));
   S = boxes.all.getSize(new THREE.Vector3()).length();
-  explodeDist = S * 0.30;
   const ctrAll = boxes.all.getCenter(new THREE.Vector3());
   const groupBox = (g) => { const b = new THREE.Box3(); meshes.filter(m => m.userData.vis === g).forEach(m => b.expandByObject(m));
     if (b.isEmpty()) b.setFromCenterAndSize(ctrAll, new THREE.Vector3(1e-3,1e-3,1e-3)); return b; };
@@ -271,6 +269,8 @@ async function start(){
   layout(); story.resolve(0);
   document.getElementById('loader').classList.add('hidden');
 
+  if (hp.has('dbg')){ const C={upper:0x3a78ff,lower:0x37d07a,imu1:0xff7a2a,imu2:0xe040ff,other:0x777777};
+    for (const m of meshes){ const c=C[m.userData.vis]; if(c){ const mt=Array.isArray(m.material)?m.material:[m.material]; mt.forEach(x=>{x.color.setHex(c);x.metalness=0;x.roughness=0.6;}); } } }
   if (hp.has('tune')) setupTuner(model);
 }
 
@@ -376,87 +376,6 @@ function standUpright(model){
   }
 }
 
-// Rotate the inner body (LowerLeg + IMU2) around two axes:
-//   tubeDeg  — degrees around the tube/bore axis (through the cuff openings)
-//   hingeDeg — degrees around the hinge-pin axis
-// Control via URL hash:  #inner=tubeDeg,hingeDeg
-// e.g. #inner=180,0 = flip 180° around the tube bore.
-function flipInner(model, tubeDeg, hingeDeg){
-  model.updateMatrixWorld(true);
-
-  // --- derive tube axis from the shell node's own transform ---
-  // Both shells share the same rotation; the tube axis is the shell's local Y
-  // rotated into world space (SolidWorks tube axis → local Y after the rz≈90° export).
-  const shell = meshes.find(m => m.userData.vis === 'lower' || m.userData.vis === 'upper');
-  if (!shell) return;
-  shell.updateWorldMatrix(true, false);
-  const tubeAxis = new THREE.Vector3(0, 1, 0)
-    .applyQuaternion(shell.getWorldQuaternion(new THREE.Quaternion())).normalize();
-
-  // pivot = centroid of the inner (lower) shell
-  const v = new THREE.Vector3(), lPts = [];
-  for (const m of meshes){
-    if (m.userData.vis !== 'lower') continue;
-    const pos = m.geometry.attributes.position;
-    for (let i = 0; i < pos.count; i++){
-      v.fromBufferAttribute(pos, i); m.localToWorld(v); lPts.push(v.clone());
-    }
-  }
-  const pivot = new THREE.Vector3();
-  lPts.forEach(p => pivot.add(p)); pivot.multiplyScalar(1 / Math.max(1, lPts.length));
-
-  // hinge axis from the contact seam between the two shells
-  const uPts = [];
-  for (const m of meshes){
-    if (m.userData.vis !== 'upper') continue;
-    const pos = m.geometry.attributes.position;
-    const step = Math.max(1, Math.floor(pos.count / 1500));
-    for (let i = 0; i < pos.count; i += step){
-      v.fromBufferAttribute(pos, i); m.localToWorld(v); uPts.push(v.clone());
-    }
-  }
-  const sz = new THREE.Box3().setFromPoints(lPts.concat(uPts)).getSize(new THREE.Vector3()).length();
-  const thr2 = (sz * 0.02) ** 2;
-  const contact = [];
-  for (const p of lPts){
-    for (const q of uPts){ if (p.distanceToSquared(q) < thr2){ contact.push(p); break; } }
-  }
-  const hingeAxis = contact.length >= 3
-    ? pca(contact).axes[0].clone().normalize()
-    : new THREE.Vector3(1, 0, 0);  // fallback
-
-  console.log(`[SmartPT] tube axis: (${tubeAxis.x.toFixed(3)}, ${tubeAxis.y.toFixed(3)}, ${tubeAxis.z.toFixed(3)})`);
-  console.log(`[SmartPT] hinge axis: (${hingeAxis.x.toFixed(3)}, ${hingeAxis.y.toFixed(3)}, ${hingeAxis.z.toFixed(3)})`);
-
-  // --- build combined rotation around the pivot ---
-  const buildRot = (axis, deg) => {
-    if (deg === 0) return null;
-    const q = new THREE.Quaternion().setFromAxisAngle(axis, deg * Math.PI / 180);
-    const R = new THREE.Matrix4().makeRotationFromQuaternion(q);
-    const T  = new THREE.Matrix4().makeTranslation( pivot.x,  pivot.y,  pivot.z);
-    const Ti = new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z);
-    return new THREE.Matrix4().multiplyMatrices(T, new THREE.Matrix4().multiplyMatrices(R, Ti));
-  };
-  let M = new THREE.Matrix4();
-  const Mt = buildRot(tubeAxis, tubeDeg);
-  const Mh = buildRot(hingeAxis, hingeDeg);
-  if (Mt) M.premultiply(Mt);
-  if (Mh) M.premultiply(Mh);
-
-  // --- apply to upper body + its IMU ---
-  for (const m of meshes){
-    if (m.userData.vis !== 'upper' && m.userData.vis !== 'imu1') continue;
-    m.updateWorldMatrix(true, false);
-    const world = m.matrixWorld.clone();
-    const parentInv = new THREE.Matrix4().copy(m.parent.matrixWorld).invert();
-    const newWorld = new THREE.Matrix4().multiplyMatrices(M, world);
-    const local = new THREE.Matrix4().multiplyMatrices(parentInv, newWorld);
-    local.decompose(m.position, m.quaternion, m.scale);
-  }
-  model.updateMatrixWorld(true);
-  console.log(`[SmartPT] upper body rotated: tube=${tubeDeg}°, hinge=${hingeDeg}°`);
-}
-
 // ---------- actors: explode/hinge movers + a translucent "leg" silhouette + angle arc ----------
 function collectMovers(groupNames){
   const arr = [];
@@ -466,73 +385,153 @@ function collectMovers(groupNames){
   return arr;
 }
 const _ident = new THREE.Matrix4(), _mm = new THREE.Matrix4(), _tt = new THREE.Matrix4(), _rr = new THREE.Matrix4();
+const _ap = new THREE.Matrix4();   // moverApply scratch — MUST be distinct from M (which may be _mm/_tt)
 function moverApply(list, M){
-  for (const mv of list){ _mm.multiplyMatrices(M, mv.base); _mm.multiplyMatrices(mv.parentInv, _mm);
-    _mm.decompose(mv.mesh.position, mv.mesh.quaternion, mv.mesh.scale); }
+  for (const mv of list){ _ap.multiplyMatrices(M, mv.base); _ap.multiplyMatrices(mv.parentInv, _ap);
+    _ap.decompose(mv.mesh.position, mv.mesh.quaternion, mv.mesh.scale); }
 }
 
 function buildActors(){
   const grp = new THREE.Group(); scene.add(grp);
 
-  // hinge axis + pivot from the real contact seam between the two shells
-  const U = worldVerts('upper', 1600), L = worldVerts('lower', 1600);
-  const thr = S * 0.02, thr2 = thr*thr, contact = [];
-  for (const p of L){ for (const q of U){ if (p.distanceToSquared(q) < thr2){ contact.push(p); break; } } }
-  const hp = new THREE.Vector3(); contact.forEach(p=>hp.add(p)); hp.multiplyScalar(1/Math.max(1,contact.length));
-  const seam = pca(contact);
-  let axis = seam.axes[0].clone().normalize();           // longest spread of the seam = pin axis
-  const pivot = hp.clone();
+  const _ctr = a => { const c = new THREE.Vector3(); a.forEach(p=>c.add(p)); return c.multiplyScalar(1/Math.max(1,a.length)); };
+  const _minD = (c, A) => { let m=1e9; for (const p of A){ const d=c.distanceToSquared(p); if(d<m)m=d; } return m; };
 
-  // tube/leg axis = the cuff ring normal (smallest principal spread of a shell)
-  const uA = pca(U);
-  let tubeAxis = uA.axes[2].clone().normalize();
-  // straight-leg direction: tube axis projected perpendicular to the hinge axis
-  let straightDir = tubeAxis.clone().addScaledVector(axis, -tubeAxis.dot(axis)).normalize();
+  // shell point clouds
+  let U = worldVerts('upper', 1600); const L = worldVerts('lower', 1600);
+  // bore/tube axis = the shell's local +Y in world space (the SolidWorks tube axis
+  // exports to local Y). THIS is the axis we finalized — not a PCA ring-normal.
+  const shellNode = meshes.find(m => m.userData.vis === 'upper' || m.userData.vis === 'lower');
+  shellNode.updateWorldMatrix(true, false);
+  const tubeAxis = new THREE.Vector3(0, 1, 0)
+    .applyQuaternion(shellNode.getWorldQuaternion(new THREE.Quaternion())).normalize();
 
-  // movers (each IMU stays rigidly with its shell)
-  const moversUpper = collectMovers(['upper','imu1']);
-  const moversLower = collectMovers(['lower','imu2']);
+  // Bind each IMU to the shell it's seated against (nearest surface) — robust to
+  // re-exports that renumber meshes / swap which MPU group is which.
+  const c1 = _ctr(worldVerts('imu1',300));
+  const imu1OnUpper = _minD(c1, U) <= _minD(c1, L);
+  const upperIMU = imu1OnUpper ? 'imu1' : 'imu2';
+  const lowerIMU = imu1OnUpper ? 'imu2' : 'imu1';
+  actors_imuBind = { upperIMU, lowerIMU };
 
-  // translucent leg silhouette through the joint (thigh fixed, shin on a hinge group)
-  const legLen = S*0.40, legR = S*0.058;
-  const skin = () => { const m = new THREE.MeshStandardMaterial({ color:0xc7d8ff, emissive:0x10243f, emissiveIntensity:0.5, transparent:true, opacity:0, roughness:0.55, metalness:0, depthWrite:false }); return m; };
+  // Re-pose: flip the UPPER shell + its IMU 180° about the bore/tube axis through the
+  // cuff centre (requested). Done before the movers capture their base, so the upper
+  // assembly then moves as one through the animation. Tunable via #upperflip=deg.
+  {
+    const hp0 = new URLSearchParams(location.hash.slice(1));
+    const deg = hp0.has('upperflip') ? (+hp0.get('upperflip')||0) : 180;
+    if (deg){
+      const cC = boxes.all.getCenter(new THREE.Vector3());
+      const M = new THREE.Matrix4().makeTranslation(cC.x,cC.y,cC.z)
+        .multiply(new THREE.Matrix4().makeRotationAxis(tubeAxis, deg*Math.PI/180))
+        .multiply(new THREE.Matrix4().makeTranslation(-cC.x,-cC.y,-cC.z));
+      for (const m of meshes){
+        if (m.userData.vis !== 'upper' && m.userData.vis !== upperIMU) continue;
+        m.updateWorldMatrix(true,false);
+        const pInv = new THREE.Matrix4().copy(m.parent.matrixWorld).invert();
+        new THREE.Matrix4().multiplyMatrices(pInv, new THREE.Matrix4().multiplyMatrices(M, m.matrixWorld))
+          .decompose(m.position, m.quaternion, m.scale);
+      }
+      scene.updateMatrixWorld(true);
+      boxes.all = new THREE.Box3(); meshes.forEach(m => boxes.all.expandByObject(m));   // re-frame
+    }
+  }
+
+  // movers (each IMU stays rigidly with its shell) — captured AFTER the flip
+  const moversUpper = collectMovers(['upper', upperIMU]);
+  const moversLower = collectMovers(['lower', lowerIMU]);
+
+  // ---- TRUE hinge axis from the two pin-hole knuckles (post-flip) ----
+  // The real hinge is a pin through two knuckles (one per arm). The PCA of the whole
+  // contact region is dominated by the broad concentric band seam and tilts the axis
+  // off the pin. Instead: keep the upper (arm) contact, split it into the two knuckles,
+  // and connect their centres — that line is the pin axis the shells truly rotate about.
+  const thr2 = (S*0.02)*(S*0.02);
+  const Upost = worldVerts('upper', 2600), cpts = [];
+  for (const p of L){ for (const q of Upost){ if (p.distanceToSquared(q) < thr2){ cpts.push(p); break; } } }
+  function detectHinge(pts){
+    if (pts.length < 10) return null;
+    let yMin=1e9, yMax=-1e9; pts.forEach(p=>{ yMin=Math.min(yMin,p.y); yMax=Math.max(yMax,p.y); });
+    let hi = pts.filter(p => p.y > yMin + 0.5*(yMax-yMin));   // the arms hold the knuckles
+    if (hi.length < 10) hi = pts;
+    const cc = _ctr(hi), A0 = pca(hi).axes[0].clone().normalize(), La=[], Ra=[];
+    hi.forEach(p => ((p.clone().sub(cc).dot(A0) < 0 ? La : Ra).push(p)));
+    if (La.length < 4 || Ra.length < 4) return null;
+    const lc = _ctr(La), rc = _ctr(Ra);
+    return { pivot: lc.clone().add(rc).multiplyScalar(0.5), axis: rc.clone().sub(lc).normalize() };
+  }
+  const _h = detectHinge(cpts) || { pivot: boxes.all.getCenter(new THREE.Vector3()), axis: new THREE.Vector3(1,0,0) };
+  const pivot = _h.pivot, axis = _h.axis;
+
+  // ---- hinge diagnostic (#hingedbg): contact (red), pin centres (yellow), axis (cyan) ----
+  if (new URLSearchParams(location.hash.slice(1)).has('hingedbg')){
+    const pg = new THREE.Points(new THREE.BufferGeometry().setFromPoints(cpts),
+      new THREE.PointsMaterial({ color:0xff2222, size:S*0.012, depthTest:false }));
+    pg.renderOrder = 30; grp.add(pg);
+    const ps = new THREE.Mesh(new THREE.SphereGeometry(S*0.03,16,12), new THREE.MeshBasicMaterial({ color:0xffe000, depthTest:false }));
+    ps.position.copy(pivot); ps.renderOrder=31; grp.add(ps);
+    const al = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pivot.clone().addScaledVector(axis,-S*0.4), pivot.clone().addScaledVector(axis,S*0.4)]),
+      new THREE.LineBasicMaterial({ color:0x00ffff, depthTest:false })); al.renderOrder=31; grp.add(al);
+    console.log('[hingedbg] contact pts:', cpts.length, 'pivot:', pivot.toArray().map(v=>+v.toFixed(3)), 'axis:', axis.toArray().map(v=>+v.toFixed(3)));
+  }
+
+  // Translucent leg silhouette. Both rods lie along the cuff BORE (tubeAxis) so they
+  // pass through the ring openings. The shin rod is fixed to the (stationary) lower
+  // shell; the thigh rod is rigid with the upper shell — it pivots about the hinge,
+  // exactly like the shell, so it stays through the upper ring as the shell swings.
+  const legLen = S*0.60, legR = S*0.055;
+  const legAxis = tubeAxis.clone().normalize();
+  const kneeC = boxes.all.getCenter(new THREE.Vector3());      // bore centre = where the rods cross at rest
+  const skin = () => new THREE.MeshStandardMaterial({ color:0xc7d8ff, emissive:0x10243f, emissiveIntensity:0.5, transparent:true, opacity:0, roughness:0.55, metalness:0, depthWrite:false });
   function bone(len, rTop, rBot, baseOp){ const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, len, 24), skin()); mesh.material.userData = { baseOp }; return mesh; }
-  function orient(mesh, origin, dir, len){ const d = dir.clone().normalize();
-    mesh.position.copy(origin).addScaledVector(d, len/2); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), d); }
 
-  // the silhouette "leg" runs through the cuff hole (knee at the cuff centre),
-  // bending about the hinge-axis DIRECTION — so it reads as a leg inside the brace,
-  // while the shells themselves still pivot about the real seam.
-  const legPivot = boxes.all.getCenter(new THREE.Vector3());
   const legGroup = new THREE.Group(); legGroup.visible = false; grp.add(legGroup);
-  const thigh = bone(legLen, legR*0.85, legR, 0.42); orient(thigh, legPivot, straightDir, legLen); legGroup.add(thigh);
-  const shinPivot = new THREE.Group(); shinPivot.position.copy(legPivot); legGroup.add(shinPivot);
-  const shin = bone(legLen, legR, legR*0.7, 0.42);
-  { const d = straightDir.clone().negate(); shin.position.copy(d.clone().multiplyScalar(legLen/2)); shin.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), d); }
-  shinPivot.add(shin);
-  const knee = new THREE.Mesh(new THREE.SphereGeometry(legR*1.05, 20, 16), skin()); knee.material.userData = { baseOp:0.42 }; knee.position.copy(legPivot); legGroup.add(knee);
+  // shin: static, extends from the knee along −bore (out the lower ring)
+  const shin = bone(legLen, legR, legR*0.82, 0.42);
+  shin.position.copy(kneeC).addScaledVector(legAxis, -legLen/2);
+  shin.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), legAxis.clone().negate());
+  legGroup.add(shin);
+  // thigh: child of a group pivoted at the hinge, so rotating that group == the upper
+  // shell's motion. At rest it extends from the knee along +bore (out the upper ring).
+  const thighPivot = new THREE.Group(); thighPivot.position.copy(pivot); legGroup.add(thighPivot);
+  const thigh = bone(legLen, legR, legR*0.82, 0.42);
+  thigh.position.copy(kneeC).addScaledVector(legAxis, legLen/2).sub(pivot);
+  thigh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), legAxis);
+  thighPivot.add(thigh);
+  const knee = new THREE.Mesh(new THREE.SphereGeometry(legR*1.05, 20, 16), skin()); knee.material.userData = { baseOp:0.42 }; knee.position.copy(kneeC); legGroup.add(knee);
 
-  // 3D angle arc at the joint
+  // 3D angle arc at the joint (spans the flexion angle from the straight-thigh dir)
   const arcMat = new THREE.LineBasicMaterial({ color:0xff6a00, transparent:true, opacity:0, depthTest:false });
   const arc = new THREE.Line(new THREE.BufferGeometry(), arcMat); arc.renderOrder = 12; legGroup.add(arc);
 
-  actors = { grp, pivot, axis, tubeAxis, straightDir, legPivot, moversUpper, moversLower,
-             legGroup, shinPivot, arc, arcMat, curAngleDeg:0 };
+  // framing box that contains the swung-open pose (upper shell at BIG_ANGLE + the rods)
+  boxes.swung = boxes.all.clone();
+  {
+    const q = new THREE.Quaternion().setFromAxisAngle(axis, BIG_ANGLE * ROT_SIGN);
+    const m = new THREE.Matrix4().makeTranslation(pivot.x,pivot.y,pivot.z)
+      .multiply(new THREE.Matrix4().makeRotationFromQuaternion(q))
+      .multiply(new THREE.Matrix4().makeTranslation(-pivot.x,-pivot.y,-pivot.z));
+    const bb = boxes.all, cn = new THREE.Vector3();
+    for (let i=0;i<8;i++){ cn.set(i&1?bb.max.x:bb.min.x, i&2?bb.max.y:bb.min.y, i&4?bb.max.z:bb.min.z).applyMatrix4(m); boxes.swung.expandByPoint(cn); }
+    boxes.swung.expandByPoint(kneeC.clone().addScaledVector(legAxis, -legLen));                 // shin tip
+    boxes.swung.expandByPoint(kneeC.clone().addScaledVector(legAxis,  legLen).applyMatrix4(m));  // thigh tip (swung)
+  }
+
+  actors = { grp, pivot, axis, tubeAxis, legAxis, kneeC, moversUpper, moversLower,
+             legGroup, thighPivot, arc, arcMat, curAngleDeg:0 };
 }
 
+// Rotate the UPPER (thigh) shell + its IMU about the hinge by `amt` radians; the lower
+// (shin) shell stays put. (Earlier the lower one moved — the user wants the upper.)
 function setMovers(mode, amt){
   if (!actors) return;
-  if (mode === 'explode'){
-    const d = explodeDist * amt, t = actors.tubeAxis;
-    moverApply(actors.moversUpper, _tt.makeTranslation(-t.x*d, -t.y*d, -t.z*d));
-    moverApply(actors.moversLower, _tt.makeTranslation( t.x*d,  t.y*d,  t.z*d));
-  } else if (mode === 'hinge'){
+  if (mode === 'upperRot'){
     const q = new THREE.Quaternion().setFromAxisAngle(actors.axis, amt);
     _rr.makeRotationFromQuaternion(q);
     const p = actors.pivot;
     _mm.makeTranslation(p.x,p.y,p.z).multiply(_rr).multiply(_tt.makeTranslation(-p.x,-p.y,-p.z));
-    moverApply(actors.moversLower, _mm);
-    moverApply(actors.moversUpper, _ident);
+    moverApply(actors.moversUpper, _mm);
+    moverApply(actors.moversLower, _ident);
   } else {
     moverApply(actors.moversUpper, _ident);
     moverApply(actors.moversLower, _ident);
@@ -541,10 +540,10 @@ function setMovers(mode, amt){
 
 function updateArc(th, on){
   actors.arcMat.opacity = 0.9 * on;
-  const r = S*0.17, N = Math.max(2, Math.round(Math.abs(th)/0.05));
-  const start = actors.straightDir.clone().negate(), pts = [], q = new THREE.Quaternion();
+  const r = S*0.16, N = Math.max(2, Math.round(Math.abs(th)/0.05));
+  const start = actors.legAxis.clone(), pts = [], q = new THREE.Quaternion();  // straight-thigh dir
   for (let k=0;k<=N;k++){ q.setFromAxisAngle(actors.axis, th*k/N);
-    pts.push(actors.legPivot.clone().addScaledVector(start.clone().applyQuaternion(q), r)); }
+    pts.push(actors.kneeC.clone().addScaledVector(start.clone().applyQuaternion(q), r)); }
   actors.arc.geometry.setFromPoints(pts);
 }
 
@@ -557,37 +556,44 @@ function defineChapters(){
     { r:[0.07,0.26], box:'all', view:'iso', pan:0.42, fit:1.6, vis:vis({ALL:1}),
       panel:side('device','A hinged knee cuff. Two shells clamp the leg; each carries an MPU-6050 IMU wired to an ESP32-S3 that streams orientation over BLE at 100&nbsp;Hz.','Brace + 2 IMUs'), dims:null, act:'rest' },
 
-    { r:[0.26,0.48], box:'all', view:'iso', pan:0.34, fit:2.2, vis:vis({ALL:1}),
-      panel:side('explode','The two halves pull apart — but each IMU stays fixed to its shell: one on the upper (thigh) side, one on the lower (shin) side.','One IMU per shell'), dims:null, act:'explode' },
+    { r:[0.26,0.48], box:'swung', view:'iso', pan:0.34, fit:1.45, vis:vis({ALL:1}),
+      panel:side('explode','The thigh (upper) shell swings open on the hinge — each shell keeps its own IMU fixed in place: one on the upper side, one on the lower (shin) side.','One IMU per shell'), dims:null, act:'twohalves' },
 
-    { r:[0.48,0.82], box:'all', view:'iso', pan:0.34, fit:1.95, vis:vis({ALL:1}),
-      panel:side('track','As the knee flexes, the hinge rotates the shells relative to each other. The angle between the two IMUs is the joint angle — fused with the camera by an EKF.','IMU Δ = joint angle'), dims:'angle', act:'hinge' },
+    { r:[0.48,0.82], box:'swung', view:'iso', pan:0.34, fit:1.45, vis:vis({ALL:1}),
+      panel:side('track','As the knee flexes, the upper shell rotates on the hinge relative to the lower. The angle between the two IMUs is exactly the joint angle — fused with the camera by an EKF.','IMU Δ = joint angle'), dims:'angle', act:'track' },
 
-    { r:[0.82,1.00], box:'all', view:'iso', pan:0, fit:2.0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, act:'rest' },
+    { r:[0.82,1.00], box:'all', view:'iso', pan:0, fit:2.0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, act:'settle' },
   ];
 }
 
 // ---------- per-frame hook ----------
+// The UPPER (thigh) shell swings open on the hinge. `twohalves` ramps it to BIG_ANGLE
+// and holds; `track` holds there with a small back-and-forth while the leg silhouette +
+// angle readout are shown; `settle` brings it back to assembled for the dock.
 function onResolve({ p, i, c, localT }){
   if (!actors) return;
   const act = c.act;
-  let th = 0, showLeg = false;
-  if (act === 'explode'){ setMovers('explode', trapUpDown(localT)); }
-  else if (act === 'hinge'){
-    // ramp to a held flexion across the dims-visible window, with a gentle live
-    // wiggle (the IMUs "tracking"), then straighten out before the settle act.
-    const ramp = smoothstep(clamp01(localT/0.40)) * (1 - smoothstep(clamp01((localT-0.86)/0.14)));
-    const wig  = 1 - 0.14 * (0.5 - 0.5*Math.cos(localT*Math.PI*6));
-    th = THETA * ramp * wig; setMovers('hinge', th); showLeg = true;
-  }
-  else { setMovers('rest', 0); }
-  actors.curAngleDeg = Math.abs(th) * 180/Math.PI;
+  let thUpper = 0, showLeg = false, moving = true;
+  if (act === 'twohalves'){
+    thUpper = BIG_ANGLE * smoothstep(clamp01(localT/0.55));
+  } else if (act === 'track'){
+    // start at BIG_ANGLE (continuous from twohalves) and oscillate (2 full cycles,
+    // ending back at BIG_ANGLE so settle can ramp it down cleanly)
+    thUpper = BIG_ANGLE - TRACK_AMP * (0.5 - 0.5*Math.cos(localT*Math.PI*4));
+    showLeg = true;
+  } else if (act === 'settle'){
+    thUpper = BIG_ANGLE * (1 - smoothstep(clamp01(localT/0.7)));
+  } else { moving = false; }
 
-  const legOn = showLeg ? smoothstep(clamp01((localT-0.04)/0.12)) * (1 - smoothstep(clamp01((localT-0.90)/0.10))) : 0;
+  const signed = thUpper * ROT_SIGN;
+  setMovers(moving ? 'upperRot' : 'rest', signed);
+  actors.curAngleDeg = Math.abs(thUpper) * 180/Math.PI;
+  actors.thighPivot.quaternion.setFromAxisAngle(actors.axis, signed);   // thigh rod rides the upper shell
+
+  const legOn = showLeg ? smoothstep(clamp01((localT-0.05)/0.12)) * (1 - smoothstep(clamp01((localT-0.92)/0.08))) : 0;
   actors.legGroup.visible = legOn > 0.01;
   actors.legGroup.traverse(o => { if (o.isMesh && o.material && o.material.userData) o.material.opacity = (o.material.userData.baseOp ?? 0.3) * legOn; });
-  actors.shinPivot.quaternion.setFromAxisAngle(actors.axis, th);
-  updateArc(th, legOn);
+  updateArc(signed, legOn);
 }
 
 // ---------- annotation overlay: the live joint-angle readout ----------
@@ -595,7 +601,7 @@ function drawDims(kind){
   if (kind !== 'angle' || !actors) return;
   const on = actors.legGroup.visible ? 1 : 0;
   if (!on){ dimsEl.innerHTML = ''; return; }
-  const K = projectPoint(camera, actors.legPivot);
+  const K = projectPoint(camera, actors.kneeC);
   const deg = Math.round(actors.curAngleDeg);
   const label = `${deg}°`;
   const w = label.length*12 + 20;
@@ -644,6 +650,8 @@ function tick(){
     applyDock(dockK);
     if (dockK < 0.999){ story.resolve(shownProgress); }
     else {
+      // fully docked: snap to the clean assembled pose (legs hidden), slow auto-rotate
+      if (actors){ setMovers('rest', 0); actors.thighPivot.quaternion.identity(); actors.legGroup.visible = false; }
       const b = boxes.all, ctr = b.getCenter(new THREE.Vector3());
       const slot = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() };
       frameCamera(camera, b, 'iso', 0, 2.0, slot);

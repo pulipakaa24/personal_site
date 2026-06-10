@@ -418,12 +418,33 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
-- **2026-06-10** — SmartPT **inner-body flip**: added `flipInner()` — rotates the inner shell
-  (`LowerLeg` + `imu2`) 180° around the tube axis (the cuff bore / ring-normal axis, computed via PCA)
-  before the orientation pipeline. This flips the inner body so its opening faces the opposite direction
-  along the cuff bore, repositioning its IMU to the other side. Uses world-space mover pattern
-  (parent-inverse decomposition) to handle nested scene-graph transforms. All downstream computations
-  (standUpright, hinge seam, explode, tracking) adapt automatically since they run after the flip.
+- **2026-06-10** — SmartPT **storyboard revamp + true hinge axis**. (1) Replaced the slide-apart "explode"
+  with the **thigh (upper) shell swinging open ~160° about the hinge** ("Two Halves"), holding there;
+  "Tracking the Angle" then holds the reveal pose, brings in the leg silhouettes, and does a small
+  back-and-forth — all moving the UPPER shell (was the lower). Constants `BIG_ANGLE` (160°), `TRACK_AMP`,
+  `ROT_SIGN` (default −1 = swing back-and-up; `#rotsign`/`#bigangle`/`#trackamp` tune them). New `settle`
+  act ramps back to assembled for the dock; framing uses a computed `boxes.swung` box so the swung pose
+  isn't clipped. (2) **True hinge axis** — the device has TWO pin-hole knuckles (one per arm); the old PCA
+  of the whole contact was dominated by the broad concentric band-seam and tilted the axis off the real
+  pin (tab/slot separated mid-swing, thigh rod missed the ring). `detectHinge()` now keeps the upper-arm
+  contact, splits it into the two knuckles, and uses the **line through their centres** as the pin axis.
+  `#hingedbg` overlays contact pts (red) / pivot (yellow) / axis (cyan) to verify. (3) **Leg silhouette
+  rebuilt** along the real bore axis (`legAxis = tubeAxis`): shin fixed to the lower shell (threads the
+  lower ring), thigh rigid with the upper shell via a hinge-pivoted group (threads the upper ring).
+  Docked branch snaps to the clean assembled pose.
+- **2026-06-10** — SmartPT **IMU fixes** (user re-exported the GLB → IMU groups renamed `mesh_1*`/`mesh_2*`):
+  (1) `classify()` keys off the MPU **group** name (`mpu6050step1`→imu2, else `mpu6050step`→imu1) — survives
+  mesh renumbering; the old `/mesh0/`,`/mesh3/` regex matched nothing so both IMUs became `'other'` and
+  didn't move. (2) **Auto-bind** each IMU to the shell it's seated against (nearest surface), in
+  `buildActors` — the static imu1→upper/imu2→lower guess was backwards on the new export. (3) Fixed a
+  **matrix-aliasing bug**: `moverApply` reused the shared `_mm` that also held the caller's hinge matrix →
+  IMUs flew off mid-flex; it now uses its own `_ap` scratch. (4) **Flip the upper shell + its IMU 180° about
+  the bore/tube axis** — defined as the shell's **local +Y in world** (`shellNode.getWorldQuaternion()`
+  applied to (0,1,0)), NOT a PCA ring-normal (using PCA was the "wrong axis" the user flagged twice). Done
+  in `buildActors` before the movers capture base; the hinge is computed from the **pre-flip** seam so the
+  flex still reads (recomputing post-flip looked broken). Tunable `#upperflip=deg`; `#dbg` colour-codes the
+  vis groups. *(Replaced an earlier experimental `flipInner()` that rotated the whole upper shell + the
+  wrong IMU about a PCA axis.)*
 - **2026-06-09** — SmartPT **orientation**: redefined `standUpright()` so the **hinge is up** (hinge-seam
   pin axis → horizontal X so the knee flex bends in the vertical screen plane; cuff→hinge → +Y; IMU side
   faced to camera). Earlier attempt stood the *tube* axis up, leaving the hinge pointing backward (user
@@ -574,18 +595,31 @@ shell (ring normal); **straightDir** = tubeAxis projected ⟂ to the hinge axis.
 **World-space part motion (the key technique):** the IMU meshes are nested under transformed parents, so
 naïvely applying a matrix to a mesh's *local* transform warps them. `collectMovers()` snapshots each
 mover's world matrix `base` + `parentInverse` once; `moverApply(list, M)` sets each `local =
-parentInv · M · base` (decomposed). `setMovers('explode'|'hinge'|'rest', amt)` resets from `base` every
-frame so acts don't accumulate. (Same idea as the Guadaloop rails-finale movers.)
+parentInv · M · base` (decomposed). `setMovers('upperRot'|'rest', amt)` resets from `base` every frame so
+acts don't accumulate. **`moverApply` uses its OWN scratch matrix `_ap`** (not the shared `_mm`/`_tt` that
+the caller may pass in as `M` — aliasing them flung IMUs off mid-rotation). (Same idea as the Guadaloop
+rails-finale movers.)
 
-**Storyboard (`#spacer` 900vh):** intro `[0,0.07]` hero → device/overview `[0.07,0.26]` → **explode**
-`[0.26,0.48]` (the two shells slide apart along the tube axis, `trapUpDown(localT)`, IMUs attached) →
-**track** `[0.48,0.82]` the hinge flexes (`act:'hinge'`, ramp-to-hold flex with a gentle live wiggle to
-~58°, then straighten) with a translucent **leg silhouette** through the cuff (thigh fixed + shin on a
-hinge group, knee at the cuff centre), a 3D **angle arc** at the joint, and an SVG **"NN° · KNEE FLEXION ·
-IMU Δ"** readout (`dims:'angle'`, drawn at the projected cuff centre) → settle `[0.82,1.0]` → dock to the
-case study (same `assets/project.css` identity as RescueVision §7). Landing page SmartPT card / honor /
-PROJECTS map now point here with the 3D cube badge. Appearance editor (press **G**) is wired (palette-only
-`appearance.json` so far — model ships its default colour; user can dress it).
+**Hinge axis (critical):** the device is a real hinge with **TWO pin-hole knuckles** (one per arm). The
+PCA of the whole upper↔lower contact is dominated by the broad concentric **band seam** and tilts the axis
+off the true pin → the tab/slot separate during the swing and the thigh rod misses the ring.
+`detectHinge()` keeps the upper-arm contact (`y > mid`), splits it into the two knuckles, and uses the
+**line through their centroids** as the pin axis (pivot = midpoint). `#hingedbg` overlays contact (red) /
+pivot (yellow) / axis (cyan).
+
+**Storyboard (`#spacer` 900vh):** intro `[0,0.07]` hero → device/overview `[0.07,0.26]` → **Two Halves**
+`[0.26,0.48]` (`act:'twohalves'`: the **upper/thigh shell + its IMU swing open ~`BIG_ANGLE`(160°)** about
+the pin and hold; `ROT_SIGN` −1 = back-and-up) → **Tracking** `[0.48,0.82]` (`act:'track'`: holds the
+reveal pose with a small back-and-forth `TRACK_AMP`, shows the translucent **leg silhouette** — shin fixed
+to the lower shell threading the lower ring, **thigh rigid with the upper shell** via a hinge-pivoted group
+threading the upper ring — plus a 3D **angle arc** and the SVG **"NN° · KNEE FLEXION · IMU Δ"** readout)
+→ **settle** `[0.82,1.0]` (`act:'settle'`: ramp the upper back to assembled) → dock to the case study (same
+`assets/project.css` identity as RescueVision §7; the docked branch snaps to the clean assembled pose).
+The moving acts frame on a computed **`boxes.swung`** box so the swung-open pose isn't clipped. Leg rods
+lie along **`legAxis = tubeAxis`** (the real bore), NOT the old `straightDir`. Hash tuners:
+`#bigangle`/`#trackamp`/`#rotsign`/`#upperflip`/`#dbg`/`#hingedbg`. Landing page SmartPT card / honor /
+PROJECTS map point here with the 3D cube badge; appearance editor (press **G**) is wired (palette-only
+`appearance.json` so far).
 
 > **Flex retiming gotcha:** the shared `Storyboard` fades the `#dims` overlay in only over localT
 > 0.45–0.65 and out after 0.88 (neighbour-aware), and `onResolve` runs BEFORE `updateOverlays`. So a flex
