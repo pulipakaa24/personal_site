@@ -270,11 +270,18 @@
     .navlinks a:not(.btn){display:none}
     .about-grid{grid-template-columns:1fr; gap:34px}
     .photo-frame{max-width:240px}
-    .work-grid,.honors,.skillgroups,.facts{grid-template-columns:1fr}
+    .work-grid,.honors,.skillgroups,.coursegroups,.facts{grid-template-columns:1fr}
     .honors{grid-template-columns:1fr 1fr}
     .card.feat{flex-direction:column; align-items:stretch}
     .card.feat .ph{flex-basis:auto; border-radius:16px 16px 0 0; aspect-ratio:16/9}
     .card.feat .meat{padding:26px}
+  }
+  @media (max-width:600px){
+    /* stack the status pill: line 1 = Qualcomm, line 2 = Guadaloop */
+    .status{align-items:flex-start; border-radius:16px}
+    .status-roles{display:flex; flex-direction:column; gap:2px}
+    .status .dot{margin-top:5px}
+    .status .sep{display:none}
   }
   @media (prefers-reduced-motion:reduce){
     *{animation:none !important}
@@ -306,7 +313,7 @@
     <p class="lede">I build at the seam of <b>hardware and software</b> — embedded systems, robotics,
       controls, and computer vision. From flight-control software to a levitating maglev rig
       to award-winning sensor-fusion hacks.</p>
-    <div class="status"><span class="dot"></span> Currently: Embedded SWE Intern @ <b>&nbsp;Qualcomm</b>&nbsp;· Lev Subteam Lead @ Guadaloop</div>
+    <div class="status"><span class="dot"></span><span class="status-roles"><span class="role">Currently: Embedded SWE Intern @ <b>Qualcomm</b></span><span class="sep">&nbsp;·&nbsp;</span><span class="role">Lev Subteam Lead @ <b>Guadaloop</b></span></span></div>
     <div class="cta">
       <a class="btn btn-solid" href="#work">View Work →</a>
       <a class="btn" href="assets/Aditya Pulipaka Resume.pdf" target="_blank" rel="noopener">Résumé</a>

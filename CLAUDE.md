@@ -488,6 +488,13 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-10** — **Landing-page mobile fixes** (`index.html`). (1) **Coursework** was a 2-col grid of groups
+  that stayed 2-col on phones (it was missing from the `@media(max-width:860px)` `grid-template-columns:1fr`
+  list — `.skillgroups` was there, `.coursegroups` wasn't) → added `.coursegroups` so the groups stack into
+  one column. (2) **"Currently…" status pill** squished on phones → restructured the markup into two `.role`
+  spans + a `.sep`; new `@media(max-width:600px)` stacks them (`.status-roles{flex-direction:column}`,
+  `.sep{display:none}`, dot aligned to line 1) so it reads on two lines (Qualcomm / Guadaloop). Desktop
+  unchanged (single line). Verified at 390px (pill 57px/two lines, coursework 1 col) and 1280px (pill 36px/one line).
 - **2026-06-10** — **Viewer chrome: glass nav chips + collapsible/replayable docked model window.**
   (1) **Nav glass chips** (all 3 viewers, `viewer.css`): the brand (logo+name) and the "Back to work" button now
   float as their own **blurred translucent pills** (`backdrop-filter: blur(14px) saturate(1.3)` + faint tint +
