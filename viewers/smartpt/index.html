@@ -491,13 +491,15 @@ function buildActors(){
   shin.position.copy(kneeC).addScaledVector(legAxis, -legLen/2);
   shin.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), legAxis.clone().negate());
   legGroup.add(shin);
-  // thigh: child of a group pivoted at the hinge, so rotating that group == the upper
-  // shell's motion. At rest it extends from the knee along +bore (out the upper ring).
-  const thighPivot = new THREE.Group(); thighPivot.position.copy(pivot); legGroup.add(thighPivot);
-  const thigh = bone(legLen, legR, legR*0.82, 0.42);
-  thigh.position.copy(kneeC).addScaledVector(legAxis, legLen/2).sub(pivot);
-  thigh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), legAxis);
-  thighPivot.add(thigh);
+  // thigh: re-oriented every frame to point from the knee toward the (rotated) upper-
+  // shell centroid, so it ALWAYS follows the blue shell up/around as it swings (instead
+  // of along the bore, which swings the wrong way). THIGH_SHIFT slides the rod along that
+  // direction (+ = toward the hip / out the top; − = back toward the knee). See onResolve.
+  //   ◀ EDIT distance-along-the-rod here; live via #thighshift=<fraction of model size S>.
+  const THIGH_SHIFT_FRAC = 0.0;
+  const THIGH_SHIFT = S * (_hpM.has('thighshift') ? +_hpM.get('thighshift') : THIGH_SHIFT_FRAC);
+  const thigh = bone(legLen, legR, legR*0.82, 0.42); legGroup.add(thigh);
+  const upperCenter = _ctr(worldVerts('upper', 1500));   // post-flip rest centroid of the thigh shell
   const knee = new THREE.Mesh(new THREE.SphereGeometry(legR*1.05, 20, 16), skin()); knee.material.userData = { baseOp:0.42 }; knee.position.copy(kneeC); legGroup.add(knee);
 
   // 3D angle arc at the joint (spans the flexion angle from the straight-thigh dir)
@@ -518,7 +520,7 @@ function buildActors(){
   }
 
   actors = { grp, pivot, axis, tubeAxis, legAxis, kneeC, moversUpper, moversLower,
-             legGroup, thighPivot, arc, arcMat, curAngleDeg:0 };
+             legGroup, thigh, upperCenter, legLen, thighShift:THIGH_SHIFT, arc, arcMat, curAngleDeg:0 };
 }
 
 // Rotate the UPPER (thigh) shell + its IMU about the hinge by `amt` radians; the lower
@@ -538,14 +540,31 @@ function setMovers(mode, amt){
   }
 }
 
-function updateArc(th, on){
+// Orient the thigh rod from the knee toward the (rotated) upper-shell centroid, so it
+// follows the blue shell as it swings. Returns the thigh's unit direction.
+const _q = new THREE.Quaternion(), _Y = new THREE.Vector3(0,1,0);
+function aimThigh(signed){
+  _q.setFromAxisAngle(actors.axis, signed);
+  const upC = actors.upperCenter.clone().sub(actors.pivot).applyQuaternion(_q).add(actors.pivot);
+  const dir = upC.sub(actors.kneeC);
+  if (dir.lengthSq() < 1e-9) dir.copy(actors.legAxis);
+  dir.normalize();
+  actors.thigh.position.copy(actors.kneeC).addScaledVector(dir, actors.legLen/2 + actors.thighShift);
+  actors.thigh.quaternion.setFromUnitVectors(_Y, dir);
+  return dir;
+}
+
+function updateArc(thighDir, on){
   actors.arcMat.opacity = 0.9 * on;
-  const r = S*0.16, N = Math.max(2, Math.round(Math.abs(th)/0.05));
-  const start = actors.legAxis.clone(), pts = [], q = new THREE.Quaternion();  // straight-thigh dir
-  for (let k=0;k<=N;k++){ q.setFromAxisAngle(actors.axis, th*k/N);
-    pts.push(actors.kneeC.clone().addScaledVector(start.clone().applyQuaternion(q), r)); }
+  // sweep from the straight-leg thigh dir (−shin = +legAxis) to the current thigh dir
+  const a = actors.legAxis.clone(), b = thighDir.clone(), r = S*0.16;
+  const ang = a.angleTo(b), N = Math.max(2, Math.round(ang/0.05));
+  const qa = new THREE.Quaternion().setFromUnitVectors(a, b), q = new THREE.Quaternion(), pts = [];
+  for (let k=0;k<=N;k++){ q.slerpQuaternions(_IDENTQ, qa, k/N);
+    pts.push(actors.kneeC.clone().addScaledVector(a.clone().applyQuaternion(q), r)); }
   actors.arc.geometry.setFromPoints(pts);
 }
+const _IDENTQ = new THREE.Quaternion();
 
 // ---------- chapters ----------
 function defineChapters(){
@@ -588,12 +607,12 @@ function onResolve({ p, i, c, localT }){
   const signed = thUpper * ROT_SIGN;
   setMovers(moving ? 'upperRot' : 'rest', signed);
   actors.curAngleDeg = Math.abs(thUpper) * 180/Math.PI;
-  actors.thighPivot.quaternion.setFromAxisAngle(actors.axis, signed);   // thigh rod rides the upper shell
+  const thighDir = aimThigh(signed);   // thigh rod points toward the (rotated) upper shell
 
   const legOn = showLeg ? smoothstep(clamp01((localT-0.05)/0.12)) * (1 - smoothstep(clamp01((localT-0.92)/0.08))) : 0;
   actors.legGroup.visible = legOn > 0.01;
   actors.legGroup.traverse(o => { if (o.isMesh && o.material && o.material.userData) o.material.opacity = (o.material.userData.baseOp ?? 0.3) * legOn; });
-  updateArc(signed, legOn);
+  updateArc(thighDir, legOn);
 }
 
 // ---------- annotation overlay: the live joint-angle readout ----------
@@ -651,7 +670,7 @@ function tick(){
     if (dockK < 0.999){ story.resolve(shownProgress); }
     else {
       // fully docked: snap to the clean assembled pose (legs hidden), slow auto-rotate
-      if (actors){ setMovers('rest', 0); actors.thighPivot.quaternion.identity(); actors.legGroup.visible = false; }
+      if (actors){ setMovers('rest', 0); actors.legGroup.visible = false; }
       const b = boxes.all, ctr = b.getCenter(new THREE.Vector3());
       const slot = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() };
       frameCamera(camera, b, 'iso', 0, 2.0, slot);

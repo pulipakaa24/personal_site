@@ -418,6 +418,13 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-10** — SmartPT **thigh-rod aiming fix**. The thigh rod was built ALONG the bore (`legAxis`),
+  whose direction swings wildly with the flex angle (up-left at 124°, up-through-blue at 160°) → looked
+  like it pointed the wrong way / overshot the knee. Now `aimThigh(signed)` re-orients it every frame to
+  point from the knee toward the **rotated upper-shell centroid** (`actors.upperCenter` rotated about the
+  hinge), so it consistently threads up through the blue (thigh) shell at every angle; shin still fixed
+  through the lower ring. `THIGH_SHIFT` (const `THIGH_SHIFT_FRAC`, ×S, or `#thighshift=`) slides the rod
+  along that direction (+ = toward the hip). The arc sweeps from the straight-leg dir to the live thigh dir.
 - **2026-06-10** — SmartPT **storyboard revamp + true hinge axis**. (1) Replaced the slide-apart "explode"
   with the **thigh (upper) shell swinging open ~160° about the hinge** ("Two Halves"), holding there;
   "Tracking the Angle" then holds the reveal pose, brings in the leg silhouettes, and does a small
