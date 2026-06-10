@@ -155,6 +155,13 @@ whole dock-to-case-study shell; you no longer hand-roll `applyDock`/scroll-mappi
   viewer-side logic (drag guards, editor re-resolve). Relies on the standard ids (`#c`, `#spacer`,
   `#title/#panel/#blurb/#dims`, `#scrollhint/#hint/#hud-progress`, optional `#dockhint`). The docked-card
   CSS (`#c.docked`, `#dockhint`) lives in `viewer.css`. Guadaloop opts out (no dock — never creates one).
+  It also owns the **docked-window controls** (built in JS by `_buildDockUI()`, no per-viewer HTML, shown only
+  when `dockK ≥ 0.985`): `#dockwin` (transparent click-catcher over the card → `replay()` smooth-scrolls back
+  up to the last storyboard beat full-screen), `#dockmin` ("›" minimise → `collapse()` slides the card off the
+  right edge via `#c.docked.collapsed`), and `#docktab` ("‹ 3D" edge tab → `expand()`). `update()` auto-clears
+  `collapsed` when `dockK < DOCK_FULL` (scrolling back toward the 3D). Minimise (corner button) and replay
+  (body click) are intentionally separate gestures. `_cardRect()` is the single source for the card's resting
+  rect (shared by `applyDock` + the controls).
 
 ### The `Storyboard` chapter model
 Each chapter is an object:
@@ -162,7 +169,9 @@ Each chapter is an object:
 { r:[start,end],            // scroll-progress range it owns (0..1 over the #spacer)
   box:'<groupKey>'|'all',   // what to frame (a vis-group, or a named runtime Box3 like 'transform')
   view:'iso'|'front'|...,   // camera direction from VIEWS
-  pan: 0..1,                // horizontal offset (model slides left so panels have room)
+  pan: 0..1,                // horizontal offset (model slides left so panels have room);
+                            //   auto-reduced on narrow/portrait viewports — frameCamera scales it by
+                            //   min(1, camera.aspect/PAN_FULL_ASPECT) so it never slides off a phone's left edge
   fit: number,              // zoom multiplier on the framed box (bigger = further out)
   vis: vis({ALL:1, grp:1}), // per-vis-group target opacity (TRANS≈translucent for the rest)
   panel:{mode:'hero'|'side'|'none', sec, blurb, tag},
@@ -201,7 +210,9 @@ The GLBs ship with few/no good materials, so this lets the user dress them and e
 ### `viewer.css`
 All shared viewer chrome: hero `#title` with outlined `.ol` word, `#panel` (top-right side title),
 `#blurb` (bottom-right), `#dims` SVG overlay (+ `.ax-x/.ax-y/.ax-z/.pill` coord call-out classes),
-`nav`, `#loader`, and the editor shell (`#editor/#legend/#picked/#dump`).
+`nav` (with **glass chips** on `.brand`/`.pbtn`), `#loader`, the **docked-window controls**
+(`#dockwin`/`#dockmin`/`#docktab` + `#c.docked.collapsed` slide-off), and the editor shell
+(`#editor/#legend/#picked/#dump`). Phone breakpoint `@media(max-width:640px)` + `@media(pointer:coarse)`.
 
 ### GLTFLoader gotcha (bit us hard — remember it)
 **Node names get spaces and dots STRIPPED** by GLTFLoader
@@ -340,7 +351,9 @@ rings) emanate from the Qorvo module; a phone→UWB ranging line resolves **dash
 After the storyboard, scroll keeps going: the fixed canvas **lerps to a top-right card** (`#c.docked`,
 responsive size), storyboard overlays fade out, the docked model auto-rotates, and a normal-flow
 `<article id="case">` (the RescueVision write-up) scrolls in below. `dockK` from
-`(scrollY − (storyEnd − 0.45vh)) / 0.7vh`.
+`(scrollY − (storyEnd − 0.45vh)) / 0.7vh`. The docked card is **collapsible** (minimise "›" → slides off to a
+"‹ 3D" edge tab) and **clicking the model replays the walkthrough** (smooth-scrolls back up) — both shared via
+`DockController` (§5), so SmartPT gets them too.
 - **Opaque floating window:** `#c.docked` is an **opaque** dark card (`background:#0a0b0e`) with
   `z-index:6` — *above* the article (`#case` is `z-index:5`, and its `.facts div`/`.dive` cards are
   opaque). So page content scrolls cleanly **behind** the card instead of clashing over the model. (The
@@ -475,6 +488,25 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-10** — **Viewer chrome: glass nav chips + collapsible/replayable docked model window.**
+  (1) **Nav glass chips** (all 3 viewers, `viewer.css`): the brand (logo+name) and the "Back to work" button now
+  float as their own **blurred translucent pills** (`backdrop-filter: blur(14px) saturate(1.3)` + faint tint +
+  `-webkit-` prefix for Safari + subtle border/shadow so they read over the pure-black hero). nav was already
+  `z-index:8`, so they were always on top — this just gives them a backdrop. (2) **Docked-window controls**
+  (RescueVision + SmartPT, in the shared **`DockController`**): a transparent click-catcher `#dockwin` over the
+  card whose **click replays the walkthrough** — `replay()` smooth-scrolls back up to `_storyEnd −
+  innerHeight*0.5` (the last storyboard beat, full-screen), reusing the existing dock lerp to grow the model
+  back; a **minimise** button `#dockmin` ("›") that **collapses the card off the right edge**
+  (`#c.docked.collapsed { transform: translateX(calc(100%+30px)) }`) leaving a thin **edge tab** `#docktab`
+  ("‹ 3D") that restores it; and **auto-restore** when the user scrolls back up toward the 3D (`update()`
+  clears `collapsed` once `dockK < DOCK_FULL`). The two click behaviours are deliberately separated (minimise =
+  the small corner button; body-click = replay) so they never misfire. Controls are built in JS by
+  `DockController._buildDockUI()` (no per-viewer HTML), shown only when essentially fully docked (`k≥0.985`),
+  with `touch-action:pan-y` on `#dockwin` so vertical swipes still scroll on mobile, real `<button>`s +
+  aria-labels, and bigger tap targets under `@media(pointer:coarse)`. Updated the stale `#dockhint` text
+  ("Drag the model…" → "Click to replay the 3D · minimise ›"). Guadaloop is unaffected (no dock; gets the nav
+  chips only). Verified: functional flow (open→minimise→edge-tab→restore→replay scrolled 11325→9297) + no
+  console errors on RescueVision & SmartPT; nav chips render in desktop Chrome **and** real iOS-Simulator Safari.
 - **2026-06-10** — **Mobile pass: fixed the iOS "stuck on frame 1" scroll bug + perf + layout.**
   **Root cause (all three viewers):** the full-screen `position:fixed` `#c` canvas was `pointer-events:auto`
   during the storyboard (CSS default for guadaloop; `DockController.applyDock` forces `auto` while `k≈0` for
@@ -491,8 +523,17 @@ Newest first. Append an entry whenever you ship something.
   the long nav `.lbl` is hidden, `#dockhint` no longer overflows. **Verified three ways (see §6):** a
   real-WebKit hit-test A/B (Playwright webkit) proving the center-press hits `#c` OLD vs `body`/`#spacer`
   FIXED on all three; the iPhone-viewport puppeteer harness (storyboard drives, no console errors, mobile
-  layout); and an authentic iOS-Simulator Safari screenshot of the fixed build. *(Open polish: on a narrow
-  phone the `pan` slides the model partly off the left edge — could scale `pan` down on `COARSE`.)*
+  layout); and an authentic iOS-Simulator Safari screenshot of the fixed build.
+- **2026-06-10** — **Mobile pan fix (portrait off-the-left-edge).** Follow-up to the mobile pass: the
+  storyboard `pan` shifts the subject by a fixed **world** amount (`frameCamera` `shift = r*pan*1.5`), so its
+  on-screen effect scales as ~1/aspect — a narrow **portrait** phone (aspect ≈0.46) threw the model ~4-5×
+  further left (off the edge) while landscape/desktop looked fine. Fixed in the shared `frameCamera` by
+  scaling the shift by `Math.min(1, camera.aspect / PAN_FULL_ASPECT)` (`PAN_FULL_ASPECT = 1.6`): only ever
+  **reduces** pan on narrow viewports, leaving aspect≥1.6 (desktop + **landscape phones**) pixel-identical,
+  and degrading smoothly (no orientation breakpoint / rotate-jump). One line in the engine → all three
+  viewers + every chapter. Verified portrait (390×844) vs landscape (844×390): the guadaloop yoke beat that
+  was a corner fragment is now centered; landscape unchanged. *(Chose aspect-scaling over a discrete portrait
+  toggle so resize/rotation/tablet/split-screen all do the right thing for free.)*
 - **2026-06-10** — **Shared the dock shell (DRY refactor).** Extracted the duplicated "viewer shell" out of
   rescuevision + smartpt into `viewers/shared/`: (1) a **`DockController`** class in `engine.js` owning the
   scroll→`progress`/`dockK` mapping, `applyDock`, the overlay fade, the `#case .reveal` observer, and the
@@ -659,12 +700,13 @@ Newest first. Append an entry whenever you ship something.
    for the abstract-placeholder project pages.
 5. Possible CS2 antenna-centering refinement toward the bottom-**right** corner if the user wants it
    tighter than bottom-center.
-6. **Mobile polish (optional, after on-device pass):** on a narrow phone the storyboard `pan` slides the
-   model partly off the left edge — scale `pan` down when `COARSE`. Consider `100dvh` for `#c`/`#spacer` so
-   the iOS address-bar resize doesn't jump the canvas. If the RescueVision finale phone-drag is wanted on
-   mobile, give the canvas `touch-action:pan-y` + re-enable pointer-events only in the finale (so vertical
-   scroll still works). The scroll/perf/layout fix itself is **verified in real WebKit + iOS Simulator**, but
-   the literal finger-swipe still wants a quick **on-device confirm** (synthetic touch isn't scriptable here).
+6. **Mobile polish (optional, after on-device pass):** ✅ the portrait off-the-left-edge `pan` is fixed
+   (aspect-scaled in `frameCamera`, `PAN_FULL_ASPECT`). Remaining nice-to-haves: consider `100dvh` for
+   `#c`/`#spacer` so the iOS address-bar resize doesn't jump the canvas; if the RescueVision finale
+   phone-drag is wanted on mobile, give the canvas `touch-action:pan-y` + re-enable pointer-events only in
+   the finale (so vertical scroll still works). The scroll/perf/layout fix itself is **verified in real
+   WebKit + iOS Simulator**, but the literal finger-swipe still wants a quick **on-device confirm** (synthetic
+   touch isn't scriptable here).
 
 ---
 

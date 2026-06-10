@@ -182,6 +182,12 @@ export function makeVis(VG){
 }
 
 // ---------- camera framing: box + view angle + horizontal pan ----------
+// `pan` slides the subject screen-left (a world-space shift) so the right-rail panels
+// have room. Its ON-SCREEN effect is ~1/aspect, so on a narrow PORTRAIT phone the same
+// pan throws the model ~4-5× further left (off the edge), while landscape/desktop look
+// fine. So scale pan by aspect, capped at 1 — only ever REDUCING it for narrow viewports;
+// at PAN_FULL_ASPECT and wider it's untouched (desktop + landscape phones stay identical).
+const PAN_FULL_ASPECT = 1.6;
 const _c = new THREE.Vector3(), _s = new THREE.Vector3(), _right = new THREE.Vector3();
 export function frameCamera(camera, box, viewKey, pan, fit, out){
   const v = VIEWS[viewKey] || VIEWS.iso;
@@ -193,7 +199,7 @@ export function frameCamera(camera, box, viewKey, pan, fit, out){
   out.pos.copy(_c).addScaledVector(v.dir, dist);
   if (pan){   // move subject to screen-left: shift cam+target along camera-right
     _right.crossVectors(v.up, v.dir).normalize();
-    const shift = r * pan * 1.5;
+    const shift = r * pan * 1.5 * Math.min(1, camera.aspect / PAN_FULL_ASPECT);
     out.pos.addScaledVector(_right, shift);
     out.target.addScaledVector(_right, shift);
   }
@@ -405,14 +411,16 @@ export class DockController {
     this._spin = 0; this._spinV = 0; this._lastT = performance.now();
     this._storyEnd = 1;
     this._slot = makeSlot(); this._ctr = new THREE.Vector3(); this._off = new THREE.Vector3();
+    this.collapsed = false;
 
+    this._buildDockUI();
     this.layout();
     addEventListener('resize', () => this.layout());
     addEventListener('scroll', () => this._onScroll(), { passive:true });
     this.observeReveals();
   }
 
-  layout(){ this._storyEnd = Math.max(1, this.spacer.offsetHeight - innerHeight); }
+  layout(){ this._storyEnd = Math.max(1, this.spacer.offsetHeight - innerHeight); this._layoutDockUI(); }
 
   _onScroll(){
     this.progress = clamp01(scrollY / this._storyEnd);
@@ -420,16 +428,52 @@ export class DockController {
     this.dockK = clamp01((scrollY - start) / span);
   }
 
+  // the docked card's resting rect (top-right corner) — shared by applyDock + the controls
+  _cardRect(){
+    const C = this.card;
+    return { w: Math.min(C.w, innerWidth - 40), h: Math.min(C.h, innerHeight * 0.34),
+             top: C.top, right: Math.min(C.right, innerWidth * 0.04) };
+  }
+
+  // Build the docked-model controls once: a transparent click-catcher over the card
+  // (click = replay the storyboard from the top), its minimise button, and the collapsed
+  // edge tab that restores it. Created here so every docking viewer inherits them.
+  _buildDockUI(){
+    const win = document.createElement('div'); win.id = 'dockwin';
+    win.title = 'Replay the 3D walkthrough';
+    const min = document.createElement('button'); min.id = 'dockmin';
+    min.setAttribute('aria-label', 'Minimise the 3D model'); min.textContent = '›';   // ›
+    win.appendChild(min);
+    const tab = document.createElement('button'); tab.id = 'docktab';
+    tab.setAttribute('aria-label', 'Show the 3D model'); tab.innerHTML = '<span>‹</span>3D';  // ‹
+    document.body.appendChild(win); document.body.appendChild(tab);
+    win.addEventListener('click', () => this.replay());
+    min.addEventListener('click', (e) => { e.stopPropagation(); this.collapse(); });
+    tab.addEventListener('click', () => this.expand());
+    this._win = win; this._tab = tab;
+    this._layoutDockUI();
+  }
+
+  _layoutDockUI(){
+    if (!this._win) return;
+    const R = this._cardRect();
+    Object.assign(this._win.style, { top: R.top+'px', right: R.right+'px', width: R.w+'px', height: R.h+'px' });
+    this._tab.style.top = (R.top + R.h/2) + 'px';
+  }
+
+  collapse(){ this.collapsed = true; }
+  expand(){ this.collapsed = false; }
+  // scroll back up to the last storyboard beat, full-screen — re-enters the 3D walkthrough
+  replay(){ this.expand(); scrollTo({ top: Math.max(0, this._storyEnd - innerHeight*0.5), behavior: 'smooth' }); }
+
   // lerp the fixed canvas from fullscreen to the top-right card; resize renderer to match
   applyDock(k){
-    const C = this.card;
-    const cardW = Math.min(C.w, innerWidth - 40), cardH = Math.min(C.h, innerHeight * 0.34),
-          cardTop = C.top, cardRight = Math.min(C.right, innerWidth*0.04);
+    const R = this._cardRect();
     const ke = ease(k);
-    const w = lerp(innerWidth, cardW, ke), h = lerp(innerHeight, cardH, ke);
-    const top = lerp(0, cardTop, ke), right = lerp(0, cardRight, ke);
+    const w = lerp(innerWidth, R.w, ke), h = lerp(innerHeight, R.h, ke);
+    const top = lerp(0, R.top, ke), right = lerp(0, R.right, ke);
     const cv = this.canvas;
-    const dh = document.getElementById('dockhint'); if (dh) dh.style.top = (cardTop + cardH + 8) + 'px';
+    const dh = document.getElementById('dockhint'); if (dh) dh.style.top = (R.top + R.h + 8) + 'px';
     cv.style.width = w+'px'; cv.style.height = h+'px';
     cv.style.top = top+'px'; cv.style.right = right+'px'; cv.style.left = 'auto';
     cv.classList.toggle('docked', k > 0.02);
@@ -438,14 +482,22 @@ export class DockController {
     this.renderer.setSize(w, h, false); this.camera.aspect = w/h; this.camera.updateProjectionMatrix();
     const disp = (id, hide) => { const el = document.getElementById(id); if (el) el.style.display = hide ? 'none' : ''; };
     disp('scrollhint', k>0.03); disp('hint', k>0.03);
-    if (dh) dh.style.opacity = (k>0.85 ? 0.55 : 0);
     const hp = document.getElementById('hud-progress'); if (hp) hp.style.opacity = k>0.4 ? 0 : 0.7;
+
+    // collapse-to-edge-tab + click-to-replay: only once the card is essentially fully docked
+    const docked = k >= 0.985;
+    cv.classList.toggle('collapsed', docked && this.collapsed);           // CSS slides it off-screen right
+    if (this._win) this._win.style.display = (docked && !this.collapsed) ? 'block' : 'none';
+    if (this._tab) this._tab.style.display = (docked && this.collapsed) ? 'flex' : 'none';
+    if (dh) dh.style.opacity = (k>0.85 && !this.collapsed) ? 0.55 : 0;
   }
 
   // one storyboard-active frame: smooth scroll, dock the canvas, run storyboard or the
   // docked rotisserie, then fade the storyboard overlays out as the model docks.
   update(){
     const now = performance.now(), dt = Math.min(0.05, (now - this._lastT)/1000); this._lastT = now;
+    // scrolling back up toward the storyboard auto-restores a collapsed window
+    if (this.collapsed && this.dockK < DOCK_FULL) this.collapsed = false;
     this.shownProgress += (this.progress - this.shownProgress) * 0.12;
     this.applyDock(this.dockK);
     if (this.dockK < DOCK_SETTLE){
