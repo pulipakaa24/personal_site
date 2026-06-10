@@ -13,9 +13,12 @@
   /* storyboard scroll length (the fixed canvas plays through this height) */
   #spacer { height: 900vh; }
 
-  /* docked viewer card frame (faded in as the model docks to the corner) */
+  /* docked viewer card frame (faded in as the model docks to the corner).
+     OPAQUE background + z-index above #case (z5) so it reads as a solid floating
+     window: the Status fact cell + "how it works" cards scroll cleanly BEHIND it
+     instead of clashing over the model. */
   #c.docked { border:1px solid rgba(255,255,255,.14); border-radius:14px;
-              box-shadow:0 24px 60px rgba(0,0,0,.6); background:rgba(8,9,12,.6); }
+              box-shadow:0 24px 60px rgba(0,0,0,.6); background:#0a0b0e; z-index:6; }
 
   /* ---- case study (normal flow, scrolls in after the storyboard docks) ----
      Styling comes from project.css; only docked-viewer-context bits live here. -->*/
@@ -660,25 +663,50 @@ function applyDock(k){
 }
 
 // ---------- loop ----------
+// Docked auto-rotate ("rotisserie") with a smooth two-way hand-off to the scroll-driven
+// storyboard. The orbit is an azimuth around the model:  ang = ang0 + wrapPi(dockSpin)*spinKeep
+//   • ang0      — the iso azimuth the storyboard settles on.
+//   • dockSpin  — angle accumulated while FULLY docked (free rotisserie).
+//   • spinKeep  — 1 when fully docked, ramping to 0 across the transition band as dockK
+//                 falls to DOCK_SETTLE; so scrolling back UP rotates the model from wherever
+//                 the carousel is, by the SHORTEST path (wrapPi), back to the iso framing —
+//                 purely as a function of scroll position in that band (no jolt either way).
+let dockSpin = 0, dockSpinV = 0, lastFrameT = performance.now();
+const DOCK_SPIN_SPEED = 0.2;     // rad/s steady spin once fully docked
+const DOCK_FULL = 0.999;         // dockK at/above which the model free-spins
+const DOCK_SETTLE = 0.8;         // ...blending back to the storyboard iso pose down to here
+const wrapPi = a => { a %= 2*Math.PI; if (a > Math.PI) a -= 2*Math.PI; if (a < -Math.PI) a += 2*Math.PI; return a; };
+const _dockSlot = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() };
+const _dockCtr = new THREE.Vector3(), _dockOff = new THREE.Vector3();
 function tick(){
   requestAnimationFrame(tick);
+  const now = performance.now(), dt = Math.min(0.05, (now - lastFrameT)/1000); lastFrameT = now;
   if (tuneMode){ updateHeadlights(); renderer.render(scene, camera); return; }
   if (editor && editor.on){ controls.update(); }
   else if (story){
     shownProgress += (progress - shownProgress) * 0.12;
     applyDock(dockK);
-    if (dockK < 0.999){ story.resolve(shownProgress); }
-    else {
-      // fully docked: snap to the clean assembled pose (legs hidden), slow auto-rotate
+    if (dockK < DOCK_SETTLE){
+      story.resolve(shownProgress);
+      dockSpin = 0; dockSpinV = 0;          // reset so the next dock restarts from the iso azimuth
+    } else {
+      // Docked or within the transition band: snap to the clean assembled pose (legs hidden)
+      // and drive the rotisserie orbit. Accumulate spin only when FULLY docked; in the band
+      // freeze it and blend it out via spinKeep so the model rotates fluidly back to iso.
       if (actors){ setMovers('rest', 0); actors.legGroup.visible = false; }
-      const b = boxes.all, ctr = b.getCenter(new THREE.Vector3());
-      const slot = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() };
-      frameCamera(camera, b, 'iso', 0, 2.0, slot);
-      const ang = performance.now()*0.0002;
-      const off = slot.pos.clone().sub(slot.target);
-      const r = Math.hypot(off.x, off.z);
-      camera.position.set(ctr.x + r*Math.cos(ang), slot.pos.y, ctr.z + r*Math.sin(ang));
-      camera.up.set(0,1,0); camera.lookAt(ctr);
+      if (dockK >= DOCK_FULL){
+        dockSpinV += (DOCK_SPIN_SPEED - dockSpinV) * 0.03;   // ease the spin speed up from rest
+        dockSpin += dockSpinV * dt;
+      }
+      const b = boxes.all; b.getCenter(_dockCtr);
+      frameCamera(camera, b, 'iso', 0, 2.0, _dockSlot);
+      _dockOff.copy(_dockSlot.pos).sub(_dockSlot.target);
+      const r = Math.hypot(_dockOff.x, _dockOff.z);
+      const ang0 = Math.atan2(_dockOff.z, _dockOff.x);       // azimuth of the settled iso view
+      const spinKeep = smoothstep(clamp01((dockK - DOCK_SETTLE) / (DOCK_FULL - DOCK_SETTLE)));
+      const ang = ang0 + wrapPi(dockSpin) * spinKeep;        // shortest-path return to iso
+      camera.position.set(_dockCtr.x + r*Math.cos(ang), _dockSlot.pos.y, _dockCtr.z + r*Math.sin(ang));
+      camera.up.set(0,1,0); camera.lookAt(_dockCtr);
     }
     const od = 1 - smoothstep(dockK);
     for (const id of ['title','panel','blurb','dims']){ const el = document.getElementById(id); if (el) el.style.opacity = ((parseFloat(el.style.opacity)||0) * od).toFixed(3); }

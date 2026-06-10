@@ -301,9 +301,23 @@ rings) emanate from the Qorvo module; a phone→UWB ranging line resolves **dash
 
 ### Dock-to-case-study
 After the storyboard, scroll keeps going: the fixed canvas **lerps to a top-right card** (`#c.docked`,
-responsive size), storyboard overlays fade out, the docked model slowly auto-rotates, and a normal-flow
+responsive size), storyboard overlays fade out, the docked model auto-rotates, and a normal-flow
 `<article id="case">` (the RescueVision write-up) scrolls in below. `dockK` from
 `(scrollY − (storyEnd − 0.45vh)) / 0.7vh`.
+- **Opaque floating window:** `#c.docked` is an **opaque** dark card (`background:#0a0b0e`) with
+  `z-index:6` — *above* the article (`#case` is `z-index:5`, and its `.facts div`/`.dive` cards are
+  opaque). So page content scrolls cleanly **behind** the card instead of clashing over the model. (The
+  canvas keeps `pointer-events:none` once docked so scroll/clicks still reach the article underneath.)
+- **Rotation hand-off (smooth, two-way):** the auto-rotate is an azimuth orbit around `boxes.all`,
+  `ang = ang0 + wrapPi(dockSpin)*spinKeep`. `ang0` = the **settled iso azimuth** (so docking in continues
+  from where the scroll left off — no jolt). `dockSpin` (eased up from rest, `DOCK_SPIN_SPEED 0.2` rad/s)
+  accumulates **only when fully docked** (`dockK ≥ DOCK_FULL 0.999`). `spinKeep =
+  smoothstep((dockK − DOCK_SETTLE 0.8)/(DOCK_FULL − DOCK_SETTLE))` blends the spin **out** across the
+  transition band `dockK ∈ [0.8, 1]`, so scrolling back *up* eases the model back to the iso framing as a
+  function of scroll position — via the **shortest angular path** (`wrapPi`, so long accumulated spins
+  don't whirl backwards). Below `DOCK_SETTLE` the orbit hands off to `story.resolve` and `dockSpin` resets.
+  *(SmartPT uses the identical dock loop; its orbit branch also resets the shell to the assembled pose +
+  hides the leg silhouette.)*
 
 **The case-study article uses the SHARED `assets/project.css` identity** (linked into the viewer after
 `viewer.css`), with the exact same markup as `projects/*.html`: `.wrap` → `.award` pill + `.lede` →
@@ -418,6 +432,21 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-10** — **Docked-card polish (RescueVision + SmartPT).** Two fixes to the top-right
+  floating model card after the case study begins. (1) **Opaque floating window:** `#c.docked` now has
+  an opaque background (`#0a0b0e`) and `z-index:6` (above `#case`'s `z-index:5`), so the opaque **Status**
+  fact cell + the **"how it works"** cards scroll cleanly *behind* it instead of clashing over the model.
+  (Previously the canvas was `z-index:1` *behind* the article with a `rgba(8,9,12,.6)` translucent bg —
+  page content painted over/through it.) (2) **Smooth two-way rotation hand-off** in the `tick()` loop:
+  the docked rotisserie is now an azimuth `ang = ang0 + wrapPi(dockSpin)*spinKeep` orbiting `boxes.all`,
+  where `ang0` is the iso azimuth the storyboard settles on, `dockSpin` accumulates only when **fully
+  docked** (`dockK ≥ DOCK_FULL 0.999`, eased up from rest), and `spinKeep = smoothstep((dockK −
+  DOCK_SETTLE 0.8)/(DOCK_FULL − DOCK_SETTLE))`. The orbit branch now owns the whole band `dockK ∈
+  [0.8, 1]` (below 0.8 → `story.resolve` + reset `dockSpin`). Result: docking *in* the spin eases up from
+  the settled iso pose (no jolt), and scrolling back *up* the model rotates from wherever the carousel is
+  back to iso along the **shortest path** (`wrapPi`, so minutes of accumulated spin don't whirl backwards)
+  purely as a function of scroll position in the band. Verified headless (opaque occlusion + return sweep);
+  no console errors.
 - **2026-06-10** — SmartPT **thigh-rod aiming fix**. The thigh rod was built ALONG the bore (`legAxis`),
   whose direction swings wildly with the flex angle (up-left at 124°, up-through-blue at 160°) → looked
   like it pointed the wrong way / overshot the knee. Now `aimThigh(signed)` re-orients it every frame to
@@ -621,7 +650,8 @@ reveal pose with a small back-and-forth `TRACK_AMP`, shows the translucent **leg
 to the lower shell threading the lower ring, **thigh rigid with the upper shell** via a hinge-pivoted group
 threading the upper ring — plus a 3D **angle arc** and the SVG **"NN° · KNEE FLEXION · IMU Δ"** readout)
 → **settle** `[0.82,1.0]` (`act:'settle'`: ramp the upper back to assembled) → dock to the case study (same
-`assets/project.css` identity as RescueVision §7; the docked branch snaps to the clean assembled pose).
+`assets/project.css` identity AND the same **opaque-card + smooth rotation hand-off** dock loop as
+RescueVision §7 — its orbit branch additionally calls `setMovers('rest',0)` + hides the leg silhouette).
 The moving acts frame on a computed **`boxes.swung`** box so the swung-open pose isn't clipped. Leg rods
 lie along **`legAxis = tubeAxis`** (the real bore), NOT the old `straightDir`. Hash tuners:
 `#bigangle`/`#trackamp`/`#rotsign`/`#upperflip`/`#dbg`/`#hingedbg`. Landing page SmartPT card / honor /
