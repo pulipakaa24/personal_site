@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SmartPT — IMU + Camera Knee-Angle Tracking · Aditya Pulipaka</title>
+<link rel="icon" href="../../assets/logo.png" />
+<link rel="stylesheet" href="../shared/viewer.css" />
+<!-- the case-study write-up below the storyboard reuses the SAME identity as every
+     project page (projects/*.html), so it reads as one consistent set. -->
+<link rel="stylesheet" href="../../assets/project.css" />
+<style>
+  /* storyboard scroll length (the fixed canvas plays through this height) */
+  #spacer { height: 900vh; }
+
+  /* docked viewer card frame (faded in as the model docks to the corner) */
+  #c.docked { border:1px solid rgba(255,255,255,.14); border-radius:14px;
+              box-shadow:0 24px 60px rgba(0,0,0,.6); background:rgba(8,9,12,.6); }
+
+  /* ---- case study (normal flow, scrolls in after the storyboard docks) ----
+     Styling comes from project.css; only docked-viewer-context bits live here. -->*/
+  #case { position: relative; z-index: 5; padding: 15vh 0 4vh; }
+  #case .award { display:inline-block; border:1px solid var(--accent); color:var(--accent);
+                 border-radius:999px; padding:6px 14px; font-size:12px; letter-spacing:.12em;
+                 text-transform:uppercase; margin-bottom:1.5rem; }
+  #case .lede { font-size:clamp(19px,2.4vw,30px); line-height:1.33; font-weight:600;
+                letter-spacing:-.01em; color:rgba(255,255,255,.92); max-width:44ch; margin:0 0 8px; }
+  #dockhint { position:fixed; z-index:6; top:344px; right:24px; width:380px; text-align:center; font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.4); opacity:0; pointer-events:none; transition:opacity .3s; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="../../index.html"><img src="../../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navright">
+    <span class="lbl">SmartPT</span>
+    <a class="pbtn" href="../../index.html#work">← Back to work</a>
+  </div>
+</nav>
+
+<div id="loader">Loading model…</div>
+<canvas id="c"></canvas>
+
+<!-- storyboard overlays (fixed) -->
+<div id="title"><h1>Smart<br><span class="ol">PT</span></h1><p>IMU + camera knee-angle tracking · scroll</p></div>
+<div id="panel"><span class="kick"></span><h2></h2></div>
+<div id="blurb"></div>
+<div id="dims"></div>
+<div id="dockhint">Keep scrolling for the write-up</div>
+
+<div id="hud-progress" class="hud">0%</div>
+<div id="scrollhint">scroll ↓</div>
+<div id="hint">press <b>G</b> for the appearance editor</div>
+
+<!-- editor shell (filled by AppearanceEditor) -->
+<div id="editor"><div id="legend"></div><div id="picked">click a part…</div></div>
+<div id="dump"><span class="x" id="dumpClose">✕ close</span><div style="margin-bottom:8px;font-size:12px;opacity:.7">Copied to clipboard. Save this as <b>appearance.json</b> in this folder, then reload.</div><textarea id="dumpText" readonly></textarea></div>
+
+<!-- scroll length for the storyboard -->
+<div id="spacer"></div>
+
+<!-- case study (normal flow, scrolls in after the storyboard docks) -->
+<article id="case">
+  <div class="wrap">
+    <span class="award">1st Place · Healthcare Track · Nexhacks @ CMU</span>
+    <p class="lede">A physical-therapy app that turns a phone — plus an optional IMU brace — into a closed-loop joint-angle tracker, giving patients real-time form feedback and clinicians richer movement data than a self-reported scale.</p>
+
+    <dl class="facts reveal">
+      <div><dt>Role</dt><dd>Sensor fusion · ESP32 firmware · BLE</dd></div>
+      <div><dt>Team</dt><dd>3 · with Mateo Taylor &amp; Dustin Nguyen</dd></div>
+      <div><dt>When</dt><dd>Jan 2026 → ongoing</dd></div>
+      <div><dt>Status</dt><dd>Live on TestFlight (Feb 2026)</dd></div>
+    </dl>
+
+    <section class="block reveal">
+      <h2>Overview</h2>
+      <p>Doctors configure a patient's exercises; patients record themselves and get real-time form
+        feedback plus long-term recovery insights. 3D keypoints from RTMPose3D fuse with an optional
+        ESP32 IMU brace over BLE through an Extended Kalman Filter that weights each camera update by
+        detection confidence. Won the Healthcare track at Nexhacks @ CMU (1500+ participants) and went
+        live on TestFlight in Feb 2026.</p>
+    </section>
+
+    <section class="block reveal">
+      <h2>The brace</h2>
+      <p>The hinged knee cuff splits into two shells that clamp the leg. Each shell carries its own
+        MPU-6050 IMU; an ESP32-S3 reads both over I²C at 100&nbsp;Hz and streams orientation to the app
+        over BLE. As the knee flexes, the hinge rotates the shells relative to each other — and the
+        angle between the two IMUs is exactly the joint angle the EKF needs.</p>
+    </section>
+
+    <section class="block reveal">
+      <h2>How it works</h2>
+      <div class="dives">
+        <div class="dive">
+          <h3>Camera + IMU time-sync over BLE</h3>
+          <p>100&nbsp;Hz IMU reads on the ESP32 batch into 30&nbsp;Hz BLE notifies; a round-trip-time
+            calibration (the app sends an ack, RTT/2 is added to each timestamp) aligns the IMU stream
+            to the recorded video.</p>
+        </div>
+        <div class="dive">
+          <h3>EKF for joint-angle fusion</h3>
+          <p>State = [joint angle, IMU bias]. The IMU drives the angle at high rate; each CV estimate is
+            a corrective update weighted by detection confidence — high-confidence frames pin the bias
+            (CV angle − IMU angle).</p>
+        </div>
+        <div class="dive">
+          <h3>Dual video pipeline</h3>
+          <p>Frames stream to the Overshoot API for live activity classification while simultaneously
+            recording locally; on session end the full clip runs through RTMPose3D for 3D keypoints used
+            by the EKF.</p>
+        </div>
+        <div class="dive">
+          <h3>Hardware-optional by design</h3>
+          <p>The IMU brace sharpens accuracy but isn't required — the same EKF falls back to a
+            constant-velocity model so the app still works phone-only.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block reveal">
+      <h2>Results</h2>
+      <ul>
+        <li><b>🏆 1st place</b> — Healthcare track, Nexhacks @ CMU (1500+ participants).</li>
+        <li>In-session activity classification plus per-session and cross-session joint-angle progress.</li>
+        <li>Shipped to TestFlight (Feb 2026); development ongoing.</li>
+      </ul>
+    </section>
+
+    <section class="block reveal">
+      <h2>Media</h2>
+      <div class="actions">
+        <a class="btn" href="https://youtu.be/TumBOi9pYTY" target="_blank" rel="noopener">▶ Hackathon demo</a>
+        <a class="btn" href="https://youtu.be/243DQZQlmLI" target="_blank" rel="noopener">▶ Walkthrough</a>
+        <a class="btn" href="#" data-placeholder>TestFlight (beta) ↗</a>
+      </div>
+    </section>
+  </div>
+
+  <footer class="wrap">
+    <a href="../../index.html#work">← All work</a>
+    <a href="../rescuevision/index.html">Next: RescueVision →</a>
+  </footer>
+</article>
+
+<script type="module">
+import {
+  createStudioScene, loadGLB, prepareMeshes, centerModel, setOpacity,
+  frameCamera, makeVis, Storyboard, projectPoint, clamp01, lerp, smoothstep, ease, trap, trapUpDown, VIEWS, THREE
+} from '../shared/engine.js';
+import { AppearanceEditor, applyAppearance } from '../shared/appearance.js';
+
+const canvas = document.getElementById('c');
+const { renderer, scene, camera, controls, updateHeadlights } = createStudioScene(canvas, { exposure: 0.95, near: 0.001, far: 5000 });
+
+// ---------- vis-groups ----------
+const VG = ['upper','lower','imu1','imu2','other'];
+const vis = makeVis(VG);
+const TRANS = 0.18;
+// classify by the compacted ancestor name chain (GLTFLoader strips spaces/dots).
+// IMU #1 (mesh_0*) is seated in the UpperLeg shell; IMU #2 (mesh_3*) in LowerLeg.
+function classify(o){
+  let names = [], n = o; while (n){ if (n.name) names.push(n.name); n = n.parent; }
+  const p = names.join('/').replace(/[^a-z0-9]/gi,'').toLowerCase();
+  if (/mesh0/.test(p)) return 'imu1';
+  if (/mesh3/.test(p)) return 'imu2';
+  if (/upperleg/.test(p)) return 'upper';
+  if (/lowerleg/.test(p)) return 'lower';
+  return 'other';
+}
+
+const SECTION = {
+  device:  { kick:'The device · 01', title:'Brace &amp;<br>IMUs' },
+  explode: { kick:'Mechanics · 02',  title:'Two Halves,<br>Two IMUs' },
+  track:   { kick:'Sensing · 03',    title:'Tracking<br>the Angle' },
+};
+
+// ---------- state ----------
+let meshes = [], chapters = [], story = null, editor = null;
+const boxes = {};
+let S = 1;
+let progress = 0, shownProgress = 0;
+let dockK = 0;
+const dimsEl = document.getElementById('dims');
+let actors = null;
+let tuneMode = false;
+
+// motion tuning
+const THETA = 58 * Math.PI/180;        // peak knee-flexion shown
+let   explodeDist = 0.32;              // along the tube axis (set to S*… at load)
+
+// ---------- load ----------
+let APPEARANCE = null;
+fetch('appearance.json').then(r => r.ok ? r.json() : null).then(j => APPEARANCE = j).catch(()=>{}).finally(start);
+
+async function start(){
+  let gltf;
+  try { gltf = await loadGLB('PTDeviceAssem.glb'); }
+  catch(err){ document.getElementById('loader').innerHTML = '<div style="color:#f55">Failed to load PTDeviceAssem.glb — serve over HTTP.</div>'; console.error(err); return; }
+  const model = gltf.scene;
+
+  meshes = prepareMeshes(model, (m) => {
+    m.envMapIntensity = 1.0;
+    if (m.metalness !== undefined){
+      m.roughness = m.metalness > 0.5 ? Math.max(m.roughness ?? 0.5, 0.34) : Math.max(m.roughness ?? 0.5, 0.5);
+    }
+  });
+  for (const o of meshes) o.userData.vis = classify(o);
+
+  // ---- orientation ----
+  // Default = a baked orientation (ROT_DEG, Euler XYZ degrees). Override the WHOLE
+  // orientation live with #rot=rx,ry,rz — that's exactly what the #tune tool emits,
+  // so you can drag the model upright yourself and paste the result back here.
+  const hp = new URLSearchParams(location.hash.slice(1));
+  model.rotation.set(0,0,0); model.updateMatrixWorld(true);
+  if (hp.has('rot')){
+    const r = hp.get('rot').split(',').map(Number);
+    model.rotation.set((r[0]||0)*Math.PI/180, (r[1]||0)*Math.PI/180, (r[2]||0)*Math.PI/180, 'XYZ');
+  } else {
+    standUpright(model);   // geometric best-guess; override via #rot (use #tune to find it)
+  }
+  model.updateMatrixWorld(true);
+
+  centerModel(model, scene);
+
+  boxes.all = new THREE.Box3(); meshes.forEach(m => boxes.all.expandByObject(m));
+  S = boxes.all.getSize(new THREE.Vector3()).length();
+  explodeDist = S * 0.30;
+  const ctrAll = boxes.all.getCenter(new THREE.Vector3());
+  const groupBox = (g) => { const b = new THREE.Box3(); meshes.filter(m => m.userData.vis === g).forEach(m => b.expandByObject(m));
+    if (b.isEmpty()) b.setFromCenterAndSize(ctrAll, new THREE.Vector3(1e-3,1e-3,1e-3)); return b; };
+  for (const g of VG) boxes[g] = groupBox(g);
+
+  applyAppearance(meshes, APPEARANCE);
+  buildActors();
+
+  defineChapters();
+  story = new Storyboard({
+    chapters, meshes, boxes, camera,
+    els: { title:document.getElementById('title'), panel:document.getElementById('panel'), blurb:document.getElementById('blurb'), dims:dimsEl, hud:document.getElementById('hud-progress') },
+    sections: SECTION,
+    hooks: { onResolve, drawDims }
+  });
+
+  editor = new AppearanceEditor({
+    renderer, scene, camera, controls, meshes, boxes,
+    toggleKey:'g', initial: APPEARANCE, onAfter: () => story.resolve(shownProgress)
+  });
+  document.getElementById('dumpClose').addEventListener('click', () => document.getElementById('dump').style.display='none');
+
+  controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
+  layout(); story.resolve(0);
+  document.getElementById('loader').classList.add('hidden');
+
+  if (hp.has('tune')) setupTuner(model);
+}
+
+// ---------- live orientation tuner (open the viewer with #tune) ----------
+// Drag to rotate the whole model; it prints a copy-pasteable `#rot=rx,ry,rz` that
+// reproduces the orientation exactly (paste it into the URL, or send it to bake as
+// the default). Pauses the storyboard so you just see the assembled model.
+function setupTuner(model){
+  tuneMode = true;
+  for (const id of ['title','panel','blurb','dims','scrollhint','hint','hud-progress','dockhint','case']){
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  }
+  document.body.style.overflow = 'hidden';
+  const sp = document.getElementById('spacer'); if (sp) sp.style.display = 'none';
+  // canvas back to fullscreen + frame the model
+  const c = renderer.domElement;
+  c.style.width='100vw'; c.style.height='100vh'; c.style.top='0'; c.style.right='auto'; c.style.left='0'; c.classList.remove('docked');
+  renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  const slot = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() };
+  frameCamera(camera, boxes.all, 'iso', 0, 1.8, slot);
+  camera.position.copy(slot.pos); camera.up.copy(slot.up); camera.lookAt(slot.target);
+
+  const hud = document.createElement('div');
+  hud.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:30;background:rgba(12,12,14,.92);border:1px solid #333;border-radius:12px;padding:14px 18px;font:13px/1.6 ui-monospace,Menlo,monospace;color:#fff;text-align:center;max-width:92vw;backdrop-filter:blur(8px)';
+  document.body.appendChild(hud);
+  const fmt = () => { const e = new THREE.Euler().setFromQuaternion(model.quaternion, 'XYZ'); const d = v => Math.round(v*180/Math.PI); return `${d(e.x)},${d(e.y)},${d(e.z)}`; };
+  const upd = () => hud.innerHTML = `<b>Orientation tuner</b> &nbsp;·&nbsp; drag to rotate &nbsp;·&nbsp; <kbd>[</kbd> <kbd>]</kbd> to roll<br>copy into the URL or send it to me: &nbsp; <b style="color:#ff6a00;font-size:15px">#rot=${fmt()}</b>`;
+  upd();
+
+  let down=false, px=0, py=0;
+  c.style.cursor='grab';
+  c.addEventListener('pointerdown', e => { down=true; px=e.clientX; py=e.clientY; c.style.cursor='grabbing'; c.setPointerCapture(e.pointerId); });
+  c.addEventListener('pointerup',   e => { down=false; c.style.cursor='grab'; });
+  c.addEventListener('pointermove', e => {
+    if (!down) return; const dx=e.clientX-px, dy=e.clientY-py; px=e.clientX; py=e.clientY;
+    const camRight = new THREE.Vector3(); camera.getWorldDirection(camRight); camRight.cross(camera.up).normalize();
+    model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), dx*0.008));
+    model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(camRight, dy*0.008));
+    model.updateMatrixWorld(true); upd();
+  });
+  addEventListener('keydown', e => {
+    if (e.key==='[' || e.key===']'){ const cd=new THREE.Vector3(); camera.getWorldDirection(cd);
+      model.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(cd, (e.key==='['?-1:1)*0.04));
+      model.updateMatrixWorld(true); upd(); }
+  });
+}
+
+// ---------- geometry helpers: hinge (contact seam) + tube axis ----------
+function worldVerts(groupName, maxN){
+  const out = [], v = new THREE.Vector3();
+  for (const m of meshes){ if (m.userData.vis !== groupName) continue;
+    const pos = m.geometry.attributes.position, step = Math.max(1, Math.floor(pos.count/maxN));
+    for (let i=0;i<pos.count;i+=step){ v.fromBufferAttribute(pos,i); m.localToWorld(v); out.push(v.clone()); } }
+  return out;
+}
+function eigenSym3(A){
+  A = A.map(r => r.slice()); const V = [[1,0,0],[0,1,0],[0,0,1]];
+  for (let it=0; it<60; it++){
+    let p=0,q=1,mx=Math.abs(A[0][1]);
+    for (const [i,j] of [[0,1],[0,2],[1,2]]) if (Math.abs(A[i][j])>=mx){ mx=Math.abs(A[i][j]); p=i; q=j; }
+    if (mx<1e-12) break;
+    const phi=0.5*Math.atan2(2*A[p][q], A[q][q]-A[p][p]), c=Math.cos(phi), s=Math.sin(phi);
+    for (let k=0;k<3;k++){ const kp=A[k][p],kq=A[k][q]; A[k][p]=c*kp-s*kq; A[k][q]=s*kp+c*kq; }
+    for (let k=0;k<3;k++){ const pk=A[p][k],qk=A[q][k]; A[p][k]=c*pk-s*qk; A[q][k]=s*pk+c*qk; }
+    for (let k=0;k<3;k++){ const vp=V[k][p],vq=V[k][q]; V[k][p]=c*vp-s*vq; V[k][q]=s*vp+c*vq; }
+  }
+  return { vals:[A[0][0],A[1][1],A[2][2]], vecs:[0,1,2].map(j=>new THREE.Vector3(V[0][j],V[1][j],V[2][j])) };
+}
+function pca(pts){
+  const c = new THREE.Vector3(); pts.forEach(p=>c.add(p)); c.multiplyScalar(1/pts.length);
+  let xx=0,yy=0,zz=0,xy=0,xz=0,yz=0;
+  for (const p of pts){ const dx=p.x-c.x,dy=p.y-c.y,dz=p.z-c.z; xx+=dx*dx;yy+=dy*dy;zz+=dz*dz;xy+=dx*dy;xz+=dx*dz;yz+=dy*dz; }
+  const n=pts.length, e=eigenSym3([[xx/n,xy/n,xz/n],[xy/n,yy/n,yz/n],[xz/n,yz/n,zz/n]]);
+  const idx=[0,1,2].sort((a,b)=>e.vals[b]-e.vals[a]);
+  return { center:c, axes:idx.map(i=>e.vecs[i].clone().normalize()), ext:idx.map(i=>2*Math.sqrt(Math.max(0,e.vals[i]))) };
+}
+
+// Stand the brace so the HINGE is up: the hinge-seam (pin) axis goes horizontal
+// (X) — so the knee flex bends in the vertical screen plane — and the cuff→hinge
+// direction points up (+Y). Then face the IMU side toward the iso camera.
+function standUpright(model){
+  model.updateMatrixWorld(true);
+  const U = worldVerts('upper', 1500), L = worldVerts('lower', 1500);
+  const S0 = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).length();
+  const thr2 = (S0*0.02)*(S0*0.02), contact = [];
+  for (const p of L){ for (const q of U){ if (p.distanceToSquared(q) < thr2){ contact.push(p); break; } } }
+  const ctr = a => { const c = new THREE.Vector3(); a.forEach(p=>c.add(p)); return c.multiplyScalar(1/Math.max(1,a.length)); };
+  const hingeC = ctr(contact), cuffC = ctr(U.concat(L));
+  const seam = pca(contact).axes[0].clone().normalize();         // hinge pin direction
+  // build target basis: seam -> +X, (cuff->hinge) -> +Y, third -> +Z
+  const e1 = seam.clone();
+  const e2 = hingeC.clone().sub(cuffC); e2.addScaledVector(e1, -e2.dot(e1)).normalize();
+  const e3 = new THREE.Vector3().crossVectors(e1, e2).normalize();
+  const R = new THREE.Matrix4().makeBasis(e1, e2, e3).invert();   // maps e1->X, e2->Y, e3->Z
+  model.quaternion.premultiply(new THREE.Quaternion().setFromRotationMatrix(R));
+  model.updateMatrixWorld(true);
+  // twist 180° about Y if needed so the IMU side faces the iso camera (+Z front-ish)
+  const imuC = ctr(worldVerts('imu1',300).concat(worldVerts('imu2',300)));
+  const cuff2 = ctr(worldVerts('upper',800).concat(worldVerts('lower',800)));
+  if (imuC.clone().sub(cuff2).z < 0){
+    model.rotateOnWorldAxis(new THREE.Vector3(0,1,0), Math.PI);
+    model.updateMatrixWorld(true);
+  }
+}
+
+// ---------- actors: explode/hinge movers + a translucent "leg" silhouette + angle arc ----------
+function collectMovers(groupNames){
+  const arr = [];
+  for (const m of meshes){ if (!groupNames.includes(m.userData.vis)) continue;
+    m.updateWorldMatrix(true,false);
+    arr.push({ mesh:m, base:m.matrixWorld.clone(), parentInv:new THREE.Matrix4().copy(m.parent.matrixWorld).invert() }); }
+  return arr;
+}
+const _ident = new THREE.Matrix4(), _mm = new THREE.Matrix4(), _tt = new THREE.Matrix4(), _rr = new THREE.Matrix4();
+function moverApply(list, M){
+  for (const mv of list){ _mm.multiplyMatrices(M, mv.base); _mm.multiplyMatrices(mv.parentInv, _mm);
+    _mm.decompose(mv.mesh.position, mv.mesh.quaternion, mv.mesh.scale); }
+}
+
+function buildActors(){
+  const grp = new THREE.Group(); scene.add(grp);
+
+  // hinge axis + pivot from the real contact seam between the two shells
+  const U = worldVerts('upper', 1600), L = worldVerts('lower', 1600);
+  const thr = S * 0.02, thr2 = thr*thr, contact = [];
+  for (const p of L){ for (const q of U){ if (p.distanceToSquared(q) < thr2){ contact.push(p); break; } } }
+  const hp = new THREE.Vector3(); contact.forEach(p=>hp.add(p)); hp.multiplyScalar(1/Math.max(1,contact.length));
+  const seam = pca(contact);
+  let axis = seam.axes[0].clone().normalize();           // longest spread of the seam = pin axis
+  const pivot = hp.clone();
+
+  // tube/leg axis = the cuff ring normal (smallest principal spread of a shell)
+  const uA = pca(U);
+  let tubeAxis = uA.axes[2].clone().normalize();
+  // straight-leg direction: tube axis projected perpendicular to the hinge axis
+  let straightDir = tubeAxis.clone().addScaledVector(axis, -tubeAxis.dot(axis)).normalize();
+
+  // movers (each IMU stays rigidly with its shell)
+  const moversUpper = collectMovers(['upper','imu1']);
+  const moversLower = collectMovers(['lower','imu2']);
+
+  // translucent leg silhouette through the joint (thigh fixed, shin on a hinge group)
+  const legLen = S*0.40, legR = S*0.058;
+  const skin = () => { const m = new THREE.MeshStandardMaterial({ color:0xc7d8ff, emissive:0x10243f, emissiveIntensity:0.5, transparent:true, opacity:0, roughness:0.55, metalness:0, depthWrite:false }); return m; };
+  function bone(len, rTop, rBot, baseOp){ const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, len, 24), skin()); mesh.material.userData = { baseOp }; return mesh; }
+  function orient(mesh, origin, dir, len){ const d = dir.clone().normalize();
+    mesh.position.copy(origin).addScaledVector(d, len/2); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), d); }
+
+  // the silhouette "leg" runs through the cuff hole (knee at the cuff centre),
+  // bending about the hinge-axis DIRECTION — so it reads as a leg inside the brace,
+  // while the shells themselves still pivot about the real seam.
+  const legPivot = boxes.all.getCenter(new THREE.Vector3());
+  const legGroup = new THREE.Group(); legGroup.visible = false; grp.add(legGroup);
+  const thigh = bone(legLen, legR*0.85, legR, 0.42); orient(thigh, legPivot, straightDir, legLen); legGroup.add(thigh);
+  const shinPivot = new THREE.Group(); shinPivot.position.copy(legPivot); legGroup.add(shinPivot);
+  const shin = bone(legLen, legR, legR*0.7, 0.42);
+  { const d = straightDir.clone().negate(); shin.position.copy(d.clone().multiplyScalar(legLen/2)); shin.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), d); }
+  shinPivot.add(shin);
+  const knee = new THREE.Mesh(new THREE.SphereGeometry(legR*1.05, 20, 16), skin()); knee.material.userData = { baseOp:0.42 }; knee.position.copy(legPivot); legGroup.add(knee);
+
+  // 3D angle arc at the joint
+  const arcMat = new THREE.LineBasicMaterial({ color:0xff6a00, transparent:true, opacity:0, depthTest:false });
+  const arc = new THREE.Line(new THREE.BufferGeometry(), arcMat); arc.renderOrder = 12; legGroup.add(arc);
+
+  actors = { grp, pivot, axis, tubeAxis, straightDir, legPivot, moversUpper, moversLower,
+             legGroup, shinPivot, arc, arcMat, curAngleDeg:0 };
+}
+
+function setMovers(mode, amt){
+  if (!actors) return;
+  if (mode === 'explode'){
+    const d = explodeDist * amt, t = actors.tubeAxis;
+    moverApply(actors.moversUpper, _tt.makeTranslation(-t.x*d, -t.y*d, -t.z*d));
+    moverApply(actors.moversLower, _tt.makeTranslation( t.x*d,  t.y*d,  t.z*d));
+  } else if (mode === 'hinge'){
+    const q = new THREE.Quaternion().setFromAxisAngle(actors.axis, amt);
+    _rr.makeRotationFromQuaternion(q);
+    const p = actors.pivot;
+    _mm.makeTranslation(p.x,p.y,p.z).multiply(_rr).multiply(_tt.makeTranslation(-p.x,-p.y,-p.z));
+    moverApply(actors.moversLower, _mm);
+    moverApply(actors.moversUpper, _ident);
+  } else {
+    moverApply(actors.moversUpper, _ident);
+    moverApply(actors.moversLower, _ident);
+  }
+}
+
+function updateArc(th, on){
+  actors.arcMat.opacity = 0.9 * on;
+  const r = S*0.17, N = Math.max(2, Math.round(Math.abs(th)/0.05));
+  const start = actors.straightDir.clone().negate(), pts = [], q = new THREE.Quaternion();
+  for (let k=0;k<=N;k++){ q.setFromAxisAngle(actors.axis, th*k/N);
+    pts.push(actors.legPivot.clone().addScaledVector(start.clone().applyQuaternion(q), r)); }
+  actors.arc.geometry.setFromPoints(pts);
+}
+
+// ---------- chapters ----------
+function defineChapters(){
+  const side = (sec, blurb, tag) => ({ mode:'side', sec, blurb, tag });
+  chapters = [
+    { r:[0.00,0.07], box:'all', view:'iso', pan:0, fit:1.7, vis:vis({ALL:1}), panel:{mode:'hero'}, blurb:'', dims:null, act:'rest' },
+
+    { r:[0.07,0.26], box:'all', view:'iso', pan:0.42, fit:1.6, vis:vis({ALL:1}),
+      panel:side('device','A hinged knee cuff. Two shells clamp the leg; each carries an MPU-6050 IMU wired to an ESP32-S3 that streams orientation over BLE at 100&nbsp;Hz.','Brace + 2 IMUs'), dims:null, act:'rest' },
+
+    { r:[0.26,0.48], box:'all', view:'iso', pan:0.34, fit:2.2, vis:vis({ALL:1}),
+      panel:side('explode','The two halves pull apart — but each IMU stays fixed to its shell: one on the upper (thigh) side, one on the lower (shin) side.','One IMU per shell'), dims:null, act:'explode' },
+
+    { r:[0.48,0.82], box:'all', view:'iso', pan:0.34, fit:1.95, vis:vis({ALL:1}),
+      panel:side('track','As the knee flexes, the hinge rotates the shells relative to each other. The angle between the two IMUs is the joint angle — fused with the camera by an EKF.','IMU Δ = joint angle'), dims:'angle', act:'hinge' },
+
+    { r:[0.82,1.00], box:'all', view:'iso', pan:0, fit:2.0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, act:'rest' },
+  ];
+}
+
+// ---------- per-frame hook ----------
+function onResolve({ p, i, c, localT }){
+  if (!actors) return;
+  const act = c.act;
+  let th = 0, showLeg = false;
+  if (act === 'explode'){ setMovers('explode', trapUpDown(localT)); }
+  else if (act === 'hinge'){
+    // ramp to a held flexion across the dims-visible window, with a gentle live
+    // wiggle (the IMUs "tracking"), then straighten out before the settle act.
+    const ramp = smoothstep(clamp01(localT/0.40)) * (1 - smoothstep(clamp01((localT-0.86)/0.14)));
+    const wig  = 1 - 0.14 * (0.5 - 0.5*Math.cos(localT*Math.PI*6));
+    th = THETA * ramp * wig; setMovers('hinge', th); showLeg = true;
+  }
+  else { setMovers('rest', 0); }
+  actors.curAngleDeg = Math.abs(th) * 180/Math.PI;
+
+  const legOn = showLeg ? smoothstep(clamp01((localT-0.04)/0.12)) * (1 - smoothstep(clamp01((localT-0.90)/0.10))) : 0;
+  actors.legGroup.visible = legOn > 0.01;
+  actors.legGroup.traverse(o => { if (o.isMesh && o.material && o.material.userData) o.material.opacity = (o.material.userData.baseOp ?? 0.3) * legOn; });
+  actors.shinPivot.quaternion.setFromAxisAngle(actors.axis, th);
+  updateArc(th, legOn);
+}
+
+// ---------- annotation overlay: the live joint-angle readout ----------
+function drawDims(kind){
+  if (kind !== 'angle' || !actors) return;
+  const on = actors.legGroup.visible ? 1 : 0;
+  if (!on){ dimsEl.innerHTML = ''; return; }
+  const K = projectPoint(camera, actors.legPivot);
+  const deg = Math.round(actors.curAngleDeg);
+  const label = `${deg}°`;
+  const w = label.length*12 + 20;
+  let s = `<svg viewBox="0 0 ${innerWidth} ${innerHeight}">`;
+  s += `<rect class="pill" x="${(K.x+22).toFixed(0)}" y="${(K.y-34).toFixed(0)}" width="${w}" height="30" rx="7"/>`;
+  s += `<text class="dt ax-x" x="${(K.x+22+w/2).toFixed(0)}" y="${(K.y-13).toFixed(0)}" text-anchor="middle" style="font-size:18px;font-weight:700">${label}</text>`;
+  s += `<text class="dt" x="${(K.x+22).toFixed(0)}" y="${(K.y+10).toFixed(0)}" style="font-size:11px;opacity:.7;letter-spacing:.12em">KNEE FLEXION · IMU Δ</text>`;
+  dimsEl.innerHTML = s + `</svg>`;
+}
+
+// ---------- scroll mapping + dock ----------
+const spacer = document.getElementById('spacer');
+let storyEnd = 1;
+function layout(){ storyEnd = Math.max(1, spacer.offsetHeight - innerHeight); }
+addEventListener('resize', layout);
+addEventListener('scroll', () => {
+  progress = clamp01(scrollY / storyEnd);
+  const start = storyEnd - innerHeight*0.45, span = innerHeight*0.7;
+  dockK = clamp01((scrollY - start) / span);
+}, { passive:true });
+
+function applyDock(k){
+  const cardW = Math.min(380, innerWidth - 40), cardH = Math.min(280, innerHeight * 0.34), cardTop = 54, cardRight = Math.min(24, innerWidth*0.04);
+  const ke = ease(k);
+  const w = lerp(innerWidth, cardW, ke), h = lerp(innerHeight, cardH, ke);
+  const top = lerp(0, cardTop, ke), right = lerp(0, cardRight, ke);
+  const dh = document.getElementById('dockhint'); if (dh) dh.style.top = (cardTop + cardH + 8) + 'px';
+  canvas.style.width = w+'px'; canvas.style.height = h+'px';
+  canvas.style.top = top+'px'; canvas.style.right = right+'px'; canvas.style.left = 'auto';
+  canvas.classList.toggle('docked', k > 0.02);
+  canvas.style.pointerEvents = k > 0.5 ? 'none' : 'auto';
+  renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
+  document.getElementById('scrollhint').style.display = k>0.03?'none':'';
+  document.getElementById('hint').style.display = k>0.03?'none':'';
+  document.getElementById('dockhint').style.opacity = (k>0.85 ? 0.55 : 0);
+  document.getElementById('hud-progress').style.opacity = k>0.4?0:0.7;
+}
+
+// ---------- loop ----------
+function tick(){
+  requestAnimationFrame(tick);
+  if (tuneMode){ updateHeadlights(); renderer.render(scene, camera); return; }
+  if (editor && editor.on){ controls.update(); }
+  else if (story){
+    shownProgress += (progress - shownProgress) * 0.12;
+    applyDock(dockK);
+    if (dockK < 0.999){ story.resolve(shownProgress); }
+    else {
+      const b = boxes.all, ctr = b.getCenter(new THREE.Vector3());
+      const slot = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() };
+      frameCamera(camera, b, 'iso', 0, 2.0, slot);
+      const ang = performance.now()*0.0002;
+      const off = slot.pos.clone().sub(slot.target);
+      const r = Math.hypot(off.x, off.z);
+      camera.position.set(ctr.x + r*Math.cos(ang), slot.pos.y, ctr.z + r*Math.sin(ang));
+      camera.up.set(0,1,0); camera.lookAt(ctr);
+    }
+    const od = 1 - smoothstep(dockK);
+    for (const id of ['title','panel','blurb','dims']){ const el = document.getElementById(id); if (el) el.style.opacity = ((parseFloat(el.style.opacity)||0) * od).toFixed(3); }
+  }
+  updateHeadlights();
+  renderer.render(scene, camera);
+}
+tick();
+
+// reveal-on-scroll for the case-study write-up (mirrors assets/project.js)
+const _io = new IntersectionObserver((entries) => {
+  for (const e of entries){ if (e.isIntersecting){ e.target.classList.add('in'); _io.unobserve(e.target); } }
+}, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+document.querySelectorAll('#case .reveal').forEach(el => _io.observe(el));
+</script>
+</body>
+</html>

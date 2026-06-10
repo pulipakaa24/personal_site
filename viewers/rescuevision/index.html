@@ -6,8 +6,10 @@
 <title>RescueVision — mmWave + UWB Victim Location · Aditya Pulipaka</title>
 <link rel="icon" href="../../assets/logo.png" />
 <link rel="stylesheet" href="../shared/viewer.css" />
+<!-- the case-study write-up below the storyboard reuses the SAME identity as every
+     project page (projects/*.html), so it reads as one consistent set. -->
+<link rel="stylesheet" href="../../assets/project.css" />
 <style>
-  :root { --accent2:#19d3ff; }
   /* storyboard scroll length (the fixed canvas plays through this height) */
   #spacer { height: 1150vh; }
 
@@ -15,25 +17,20 @@
   #c.docked { border:1px solid rgba(255,255,255,.14); border-radius:14px;
               box-shadow:0 24px 60px rgba(0,0,0,.6); background:rgba(8,9,12,.6); }
 
-  /* ---- case study article (normal scrolling after the storyboard) ---- */
-  #case { position: relative; z-index: 5; max-width: 920px; margin: 0 auto; padding: 8vh 7vw 18vh; }
-  #case .lede { font-size: clamp(20px,2.6vw,34px); line-height:1.3; font-weight:600; letter-spacing:-.01em; margin-bottom:2.4rem; }
-  #case h2 { font-size: clamp(13px,1.4vw,15px); letter-spacing:.28em; text-transform:uppercase; color:var(--accent); margin:3.2rem 0 1rem; }
-  #case h3 { font-size: clamp(17px,1.8vw,21px); margin:1.8rem 0 .5rem; font-weight:700; }
-  #case p { color: rgba(255,255,255,.74); line-height:1.7; margin-bottom:1rem; font-size: clamp(14px,1.1vw,16px); }
-  #case ul { color: rgba(255,255,255,.74); line-height:1.7; margin:0 0 1rem 1.1rem; font-size: clamp(14px,1.1vw,16px); }
-  #case li { margin-bottom:.5rem; }
-  #case .facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin:1.4rem 0 1rem; }
-  #case .fact { border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:14px 16px; background:rgba(255,255,255,.02); }
-  #case .fact .k { font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:rgba(255,255,255,.4); margin-bottom:.4rem; }
-  #case .fact .v { font-size:14px; color:#fff; line-height:1.45; }
-  #case a.inline { color:var(--accent2); text-decoration:none; border-bottom:1px solid rgba(25,211,255,.35); }
-  #case .media { display:flex; flex-wrap:wrap; gap:12px; margin-top:1rem; }
-  #case .media a { color:#fff; text-decoration:none; border:1px solid rgba(255,255,255,.16); border-radius:999px; padding:9px 16px; font-size:13px; transition:.2s; }
-  #case .media a:hover { border-color:var(--accent); color:var(--accent); }
-  #case .award { display:inline-block; border:1px solid var(--accent); color:var(--accent); border-radius:999px; padding:6px 14px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; margin-bottom:1.6rem; }
-  #case .endcap { margin-top:6vh; padding-top:3vh; border-top:1px solid rgba(255,255,255,.1); display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; }
-  #case .endcap a { color:#fff; text-decoration:none; font-weight:700; }
+  /* ---- case study (normal flow, scrolls in after the storyboard docks) ----
+     Styling comes from project.css (.wrap/.facts/.block/.dives/.soon/footer);
+     only the bits unique to the docked-viewer context live here. The article
+     stays transparent so the docked model card shows through its top-right. */
+  #case { position: relative; z-index: 5; padding: 15vh 0 4vh; }
+  #case .award { display:inline-block; border:1px solid var(--accent); color:var(--accent);
+                 border-radius:999px; padding:6px 14px; font-size:12px; letter-spacing:.12em;
+                 text-transform:uppercase; margin-bottom:1.5rem; }
+  /* keep the intro copy clear of the docked model card (top-right) */
+  #case .lede { font-size:clamp(19px,2.4vw,30px); line-height:1.33; font-weight:600;
+                letter-spacing:-.01em; color:rgba(255,255,255,.92); max-width:44ch; margin:0 0 8px; }
+  #case .dive ul { list-style:none; margin-top:2px }
+  #case .dive li { font-size:14px; color:var(--muted); line-height:1.5; padding:5px 0 5px 16px; position:relative }
+  #case .dive li::before { content:"›"; position:absolute; left:0; color:var(--accent); font-weight:800 }
   #dockhint { position:fixed; z-index:6; top:344px; right:24px; width:380px; text-align:center; font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.4); opacity:0; pointer-events:none; transition:opacity .3s; }
 </style>
 <script type="importmap">
@@ -78,48 +75,68 @@
 
 <!-- case study (normal flow, scrolls in after the storyboard docks) -->
 <article id="case">
-  <span class="award">1st Place · Analog Devices Sensor-Fusion · StarkHacks @ Purdue</span>
-  <p class="lede">A wall-mounted hub that sweeps a 60&nbsp;GHz radar to find people through drywall, smoke and fire — then drops each victim into the responder's own AR view, even with no line of sight.</p>
+  <div class="wrap">
+    <span class="award">1st Place · Analog Devices Sensor-Fusion · StarkHacks @ Purdue</span>
+    <p class="lede">A wall-mounted hub that sweeps a 60&nbsp;GHz radar to find people through drywall, smoke and fire — then drops each victim into the responder's own AR view, even with no line of sight.</p>
 
-  <div class="facts">
-    <div class="fact"><div class="k">Role</div><div class="v">Embedded firmware · frame-of-reference math · hub mechanics</div></div>
-    <div class="fact"><div class="k">Team</div><div class="v">4 · Shoban Ananth, Su Park, Betool Mohsen · mentor Cameron Villone (ADI)</div></div>
-    <div class="fact"><div class="k">When</div><div class="v">Apr–May 2026 · hackathon build + post-finals polish</div></div>
-    <div class="fact"><div class="k">Status</div><div class="v">Shipped — functional prototype</div></div>
+    <dl class="facts reveal">
+      <div><dt>Role</dt><dd>Embedded firmware · frame-of-reference math · hub mechanics</dd></div>
+      <div><dt>Team</dt><dd>4 · Shoban Ananth, Su Park, Betool Mohsen · mentor Cameron Villone (ADI)</dd></div>
+      <div><dt>When</dt><dd>Apr–May 2026 · hackathon build + post-finals polish</dd></div>
+      <div><dt>Status</dt><dd>Shipped — functional prototype</dd></div>
+    </dl>
+
+    <section class="block reveal">
+      <h2>The problem</h2>
+      <p>First responders entering an unfamiliar building have no good way to know where the people inside are — especially if those people are stationary or unconscious and can't call out. A persistently-installed sensor hub plus a responder phone app can give that information cheaply, even through walls.</p>
+    </section>
+
+    <section class="block reveal">
+      <h2>How it works</h2>
+      <div class="dives">
+        <div class="dive">
+          <h3>Sensing</h3>
+          <p>A TI IWR6843AOPEVM runs TI's Vital-Signs &amp; People-Tracking binary: a 120° field-of-view, 60&nbsp;GHz radar scan whose on-board DSP identifies people by their detected vitals and movement — work that survives drywall and smoke.</p>
+        </div>
+        <div class="dive">
+          <h3>Hub control loop</h3>
+          <ul>
+            <li>An ESP32-S3 uses USB-host to configure and initialize the radar, then ingests its bounding-box output.</li>
+            <li>Compass calibration: the installer sweeps the hub through 360°; the stepper is locked at 0° until that's done.</li>
+            <li>The stepper then sweeps in 90° steps (0→360→0). With a 120° FOV that overlap covers the full room.</li>
+            <li>ESP-NN classifies each track as active, unconscious/stationary, or phantom; if 2&nbsp;s pass with no real detection, it steps again.</li>
+          </ul>
+        </div>
+        <div class="dive">
+          <h3>Frame-of-reference math</h3>
+          <p>Detections start in the radar's frame. Using SolidWorks-derived offsets plus the live stepper angle, each position is transformed into the Qorvo DWM3001CDK (UWB) frame, bundled with the compass heading, and streamed over BLE to the responder app.</p>
+        </div>
+        <div class="dive">
+          <h3>Responder localization</h3>
+          <p>The app pairs UWB ranging with ARKit's visual-inertial odometry and solves (Gauss-Jordan) for the hub's pose relative to the phone — then re-expresses every detection in the responder's own frame and renders an on-screen indicator, even far away with an occluded view.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block reveal">
+      <h2>Results &amp; honest limits</h2>
+      <p>Through-wall victim localization, rendered live in the responder's AR frame — enough to take 1st place in Analog Devices' Sensor-Fusion track at StarkHacks. It's a prototype: ranging accuracy degrades with multipath, the sweep cadence trades latency for coverage, and a v2 would add multiple hubs for triangulation.</p>
+    </section>
+
+    <section class="block reveal">
+      <h2>Media</h2>
+      <div class="actions">
+        <a class="btn" href="https://www.youtube.com/watch?v=SlMJJwz8QeA" target="_blank" rel="noopener">▶ Main demo (1:39)</a>
+        <a class="btn" href="https://youtu.be/WuoMCzevC1U" target="_blank" rel="noopener">▶ Short cut (0:56)</a>
+        <a class="btn" href="https://youtu.be/JVRwZt_0suA" target="_blank" rel="noopener">▶ IWR bring-up (1:02)</a>
+      </div>
+    </section>
   </div>
 
-  <h2>The problem</h2>
-  <p>First responders entering an unfamiliar building have no good way to know where the people inside are — especially if those people are stationary or unconscious and can't call out. A persistently-installed sensor hub plus a responder phone app can give that information cheaply, even through walls.</p>
-
-  <h2>How it works</h2>
-  <h3>Sensing</h3>
-  <p>A TI IWR6843AOPEVM runs TI's Vital-Signs &amp; People-Tracking binary: a 120° field-of-view, 60&nbsp;GHz radar scan whose on-board DSP identifies people by their detected vitals and movement — work that survives drywall and smoke.</p>
-  <h3>Hub control loop</h3>
-  <ul>
-    <li>An ESP32-S3 uses USB-host to configure and initialize the radar, then ingests its bounding-box output.</li>
-    <li>Compass calibration: the installer sweeps the hub through 360°; the stepper is locked at 0° until that's done.</li>
-    <li>The stepper then sweeps in 90° steps (0→360→0). With a 120° FOV that overlap covers the full room.</li>
-    <li>ESP-NN classifies each track as active, unconscious/stationary, or phantom; if 2&nbsp;s pass with no real detection, it steps again.</li>
-  </ul>
-  <h3>Frame-of-reference math</h3>
-  <p>Detections start in the radar's frame. Using SolidWorks-derived offsets plus the live stepper angle, each position is transformed into the Qorvo DWM3001CDK (UWB) frame, bundled with the compass heading, and streamed over BLE to the responder app.</p>
-  <h3>Responder localization</h3>
-  <p>The app pairs UWB ranging with ARKit's visual-inertial odometry and solves (Gauss-Jordan) for the hub's pose relative to the phone — then re-expresses every detection in the responder's own frame and renders an on-screen indicator, even far away with an occluded view.</p>
-
-  <h2>Results &amp; honest limits</h2>
-  <p>Through-wall victim localization, rendered live in the responder's AR frame — enough to take 1st place in Analog Devices' Sensor-Fusion track at StarkHacks. It's a prototype: ranging accuracy degrades with multipath, the sweep cadence trades latency for coverage, and a v2 would add multiple hubs for triangulation.</p>
-
-  <h2>Media</h2>
-  <div class="media">
-    <a class="inline" href="https://www.youtube.com/watch?v=SlMJJwz8QeA" target="_blank" rel="noopener">▶ Main demo (1:39)</a>
-    <a class="inline" href="https://youtu.be/WuoMCzevC1U" target="_blank" rel="noopener">▶ Short cut (0:56)</a>
-    <a class="inline" href="https://youtu.be/JVRwZt_0suA" target="_blank" rel="noopener">▶ IWR bring-up (1:02)</a>
-  </div>
-
-  <div class="endcap">
+  <footer class="wrap">
     <a href="../../index.html#work">← All work</a>
     <a href="../guadaloop/index.html">Next: Guadaloop test rig →</a>
-  </div>
+  </footer>
 </article>
 
 <script type="module">
@@ -629,6 +646,12 @@ function tick(){
   renderer.render(scene, camera);
 }
 tick();
+
+// reveal-on-scroll for the case-study write-up (mirrors assets/project.js)
+const _io = new IntersectionObserver((entries) => {
+  for (const e of entries){ if (e.isIntersecting){ e.target.classList.add('in'); _io.unobserve(e.target); } }
+}, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+document.querySelectorAll('#case .reveal').forEach(el => _io.observe(el));
 </script>
 </body>
 </html>
