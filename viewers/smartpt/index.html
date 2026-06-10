@@ -215,11 +215,15 @@ async function start(){
   });
   for (const o of meshes) o.userData.vis = classify(o);
 
-  // ---- orientation ----
-  // Default = a baked orientation (ROT_DEG, Euler XYZ degrees). Override the WHOLE
-  // orientation live with #rot=rx,ry,rz — that's exactly what the #tune tool emits,
-  // so you can drag the model upright yourself and paste the result back here.
+  // ---- hash-tunable parameters ----
+  // #rot=rx,ry,rz       — override the WHOLE model orientation (Euler XYZ degrees)
+  // #inner=tube,hinge   — rotate the inner body (LowerLeg + IMU2) in degrees:
+  //                        tube  = around the bore axis (through the cuff openings)
+  //                        hinge = around the hinge-pin axis
+  // #tune               — opens the interactive orientation tuner
   const hp = new URLSearchParams(location.hash.slice(1));
+
+  // ---- orientation (runs FIRST on unmodified geometry for stable results) ----
   model.rotation.set(0,0,0); model.updateMatrixWorld(true);
   if (hp.has('rot')){
     const r = hp.get('rot').split(',').map(Number);
@@ -228,6 +232,13 @@ async function start(){
     standUpright(model);   // geometric best-guess; override via #rot (use #tune to find it)
   }
   model.updateMatrixWorld(true);
+
+  // ---- upper-body rotation (baked: 180° around tube axis) ----
+  // Override via #inner=tube,hinge (degrees). Default is 180,0.
+  {
+    const r = hp.has('inner') ? hp.get('inner').split(',').map(Number) : [180, 0];
+    flipInner(model, r[0]||0, r[1]||0);
+  }
 
   centerModel(model, scene);
 
@@ -363,6 +374,87 @@ function standUpright(model){
     model.rotateOnWorldAxis(new THREE.Vector3(0,1,0), Math.PI);
     model.updateMatrixWorld(true);
   }
+}
+
+// Rotate the inner body (LowerLeg + IMU2) around two axes:
+//   tubeDeg  — degrees around the tube/bore axis (through the cuff openings)
+//   hingeDeg — degrees around the hinge-pin axis
+// Control via URL hash:  #inner=tubeDeg,hingeDeg
+// e.g. #inner=180,0 = flip 180° around the tube bore.
+function flipInner(model, tubeDeg, hingeDeg){
+  model.updateMatrixWorld(true);
+
+  // --- derive tube axis from the shell node's own transform ---
+  // Both shells share the same rotation; the tube axis is the shell's local Y
+  // rotated into world space (SolidWorks tube axis → local Y after the rz≈90° export).
+  const shell = meshes.find(m => m.userData.vis === 'lower' || m.userData.vis === 'upper');
+  if (!shell) return;
+  shell.updateWorldMatrix(true, false);
+  const tubeAxis = new THREE.Vector3(0, 1, 0)
+    .applyQuaternion(shell.getWorldQuaternion(new THREE.Quaternion())).normalize();
+
+  // pivot = centroid of the inner (lower) shell
+  const v = new THREE.Vector3(), lPts = [];
+  for (const m of meshes){
+    if (m.userData.vis !== 'lower') continue;
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++){
+      v.fromBufferAttribute(pos, i); m.localToWorld(v); lPts.push(v.clone());
+    }
+  }
+  const pivot = new THREE.Vector3();
+  lPts.forEach(p => pivot.add(p)); pivot.multiplyScalar(1 / Math.max(1, lPts.length));
+
+  // hinge axis from the contact seam between the two shells
+  const uPts = [];
+  for (const m of meshes){
+    if (m.userData.vis !== 'upper') continue;
+    const pos = m.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(pos.count / 1500));
+    for (let i = 0; i < pos.count; i += step){
+      v.fromBufferAttribute(pos, i); m.localToWorld(v); uPts.push(v.clone());
+    }
+  }
+  const sz = new THREE.Box3().setFromPoints(lPts.concat(uPts)).getSize(new THREE.Vector3()).length();
+  const thr2 = (sz * 0.02) ** 2;
+  const contact = [];
+  for (const p of lPts){
+    for (const q of uPts){ if (p.distanceToSquared(q) < thr2){ contact.push(p); break; } }
+  }
+  const hingeAxis = contact.length >= 3
+    ? pca(contact).axes[0].clone().normalize()
+    : new THREE.Vector3(1, 0, 0);  // fallback
+
+  console.log(`[SmartPT] tube axis: (${tubeAxis.x.toFixed(3)}, ${tubeAxis.y.toFixed(3)}, ${tubeAxis.z.toFixed(3)})`);
+  console.log(`[SmartPT] hinge axis: (${hingeAxis.x.toFixed(3)}, ${hingeAxis.y.toFixed(3)}, ${hingeAxis.z.toFixed(3)})`);
+
+  // --- build combined rotation around the pivot ---
+  const buildRot = (axis, deg) => {
+    if (deg === 0) return null;
+    const q = new THREE.Quaternion().setFromAxisAngle(axis, deg * Math.PI / 180);
+    const R = new THREE.Matrix4().makeRotationFromQuaternion(q);
+    const T  = new THREE.Matrix4().makeTranslation( pivot.x,  pivot.y,  pivot.z);
+    const Ti = new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z);
+    return new THREE.Matrix4().multiplyMatrices(T, new THREE.Matrix4().multiplyMatrices(R, Ti));
+  };
+  let M = new THREE.Matrix4();
+  const Mt = buildRot(tubeAxis, tubeDeg);
+  const Mh = buildRot(hingeAxis, hingeDeg);
+  if (Mt) M.premultiply(Mt);
+  if (Mh) M.premultiply(Mh);
+
+  // --- apply to upper body + its IMU ---
+  for (const m of meshes){
+    if (m.userData.vis !== 'upper' && m.userData.vis !== 'imu1') continue;
+    m.updateWorldMatrix(true, false);
+    const world = m.matrixWorld.clone();
+    const parentInv = new THREE.Matrix4().copy(m.parent.matrixWorld).invert();
+    const newWorld = new THREE.Matrix4().multiplyMatrices(M, world);
+    const local = new THREE.Matrix4().multiplyMatrices(parentInv, newWorld);
+    local.decompose(m.position, m.quaternion, m.scale);
+  }
+  model.updateMatrixWorld(true);
+  console.log(`[SmartPT] upper body rotated: tube=${tubeDeg}°, hinge=${hingeDeg}°`);
 }
 
 // ---------- actors: explode/hinge movers + a translucent "leg" silhouette + angle arc ----------

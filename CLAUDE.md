@@ -18,7 +18,7 @@
 > only have time for one doc update, update the Changelog + Roadmap. A stale context doc is worse
 > than none — it misleads the next agent.
 >
-> Last updated: **2026-06-09**.
+> Last updated: **2026-06-10**.
 
 ---
 
@@ -418,6 +418,12 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-10** — SmartPT **inner-body flip**: added `flipInner()` — rotates the inner shell
+  (`LowerLeg` + `imu2`) 180° around the tube axis (the cuff bore / ring-normal axis, computed via PCA)
+  before the orientation pipeline. This flips the inner body so its opening faces the opposite direction
+  along the cuff bore, repositioning its IMU to the other side. Uses world-space mover pattern
+  (parent-inverse decomposition) to handle nested scene-graph transforms. All downstream computations
+  (standUpright, hinge seam, explode, tracking) adapt automatically since they run after the flip.
 - **2026-06-09** — SmartPT **orientation**: redefined `standUpright()` so the **hinge is up** (hinge-seam
   pin axis → horizontal X so the knee flex bends in the vertical screen plane; cuff→hinge → +Y; IMU side
   faced to camera). Earlier attempt stood the *tube* axis up, leaving the hinge pointing backward (user
