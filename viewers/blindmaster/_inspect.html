@@ -14,31 +14,78 @@ addEventListener('resize',resize); resize();
 
 const compact = s => (s||'').replace(/[^a-z0-9]/gi,'').toLowerCase();
 
-loadGLB('./servobox.glb').then(gltf=>{
+loadGLB('./' + (new URLSearchParams(location.search).get('glb') || 'servobox.glb')).then(gltf=>{
   const model = gltf.scene;
   prepareMeshes(model, m=>{ m.roughness=Math.max(m.roughness??0.5,0.45); });
   const box = centerModel(model, scene);
-
-  // per-mesh world AABBs + ancestor name chain
-  const parts = [];
   model.updateWorldMatrix(true,true);
+
+  const qs = new URLSearchParams(location.search);
+
+  // optional: replicate the viewer's placeXiao reassembly so it can be inspected isolated
+  if (qs.has('reassemble')){
+    const _b=new THREE.Box3(),_c=new THREE.Vector3();
+    const cen=m=>{_b.setFromObject(m).getCenter(_c);return _c.clone();};
+    const isXiao=m=>{const ch=[];let p=m;while(p){if(p.name)ch.push(p.name);p=p.parent;}const cc=compact(ch.join('/'));return /seeed|xiao|esp32c6|esp32s3/.test(cc)&&!/xiaopcbplaceholder/.test(cc);};
+    const all=[];model.traverse(o=>o.isMesh&&all.push(o));
+    const floating=all.filter(m=>isXiao(m)&&cen(m).z<-0.012);
+    const C=new THREE.Vector3();floating.forEach(m=>C.add(cen(m)));C.multiplyScalar(1/floating.length);
+    const carrier=all.find(m=>/xiaopcbplaceholder/.test((m.name||'').replace(/[^a-z0-9]/gi,'').toLowerCase()));
+    const G=carrier?cen(carrier):C.clone();
+    const t=(qs.get('xiao')||'').split(',').map(Number);
+    const dx=(t[0]||0)/1000,dy=(t[1]||0)/1000,dz=(t[2]||0)/1000,yaw=(t.length>3?t[3]:90),flip=(t[4]||0);
+    const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw*Math.PI/180);
+    if(flip)q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI));
+    const off=new THREE.Vector3(G.x-C.x+0.004+dx,G.y-C.y+dy,G.z-C.z+dz);
+    const W=new THREE.Matrix4().multiply(new THREE.Matrix4().makeTranslation(C.x+off.x,C.y+off.y,C.z+off.z))
+      .multiply(new THREE.Matrix4().makeRotationFromQuaternion(q))
+      .multiply(new THREE.Matrix4().makeTranslation(-C.x,-C.y,-C.z));
+    const _tt=new THREE.Matrix4();
+    for(const m of floating){m.updateWorldMatrix(true,false);const pInv=m.parent.matrixWorld.clone().invert();
+      _tt.multiplyMatrices(W,m.matrixWorld);pInv.multiply(_tt);pInv.decompose(m.position,m.quaternion,m.scale);m.updateWorldMatrix(true,true);}
+    model.updateWorldMatrix(true,true);
+  }
+  const onlyRe  = qs.get('only')  ? new RegExp(qs.get('only'),'i')  : null;   // hide non-matching
+  const hideRe  = qs.get('hide')  ? new RegExp(qs.get('hide'),'i')  : null;   // hide matching
+  const frameRe = qs.get('frame') ? new RegExp(qs.get('frame'),'i') : null;   // frame on matching
+  const tint = qs.has('tint');
+  const rainbow = qs.has('rainbow');
+  let _ri = 0;
+  // tint key XIAO-region parts so the alignment relationship is legible
+  const TINT = [
+    [/xiaopcbplaceholder/, 0x33dd55],   // green  = carrier PCB
+    [/usbtypec/,           0x3a7bff],   // blue   = USB-C body (the 4 tabs)
+    [/shield/,             0xc9ccd2],   // silver = RF shield (label face)
+    [/mesh6(\b|[^0-9])/,   0xff4444],   // red    = the board (mesh_6*) with the 4 holes
+    [/mesh35/,             0xffa033],   // orange = U.FL connector
+  ];
+
+  const parts = [];
+  const frameBox = new THREE.Box3(); let frameAny=false;
   model.traverse(o=>{
     if(!o.isMesh) return;
+    const chain=[]; let p=o; while(p){ if(p.name) chain.push(p.name); p=p.parent; }
+    const cc = compact(chain.join('/'));
+    if(onlyRe && !onlyRe.test(cc)){ o.visible=false; return; }
+    if(hideRe && hideRe.test(cc)){ o.visible=false; return; }
+    if(tint){ let col=0x555a63; for(const [re,c] of TINT){ if(re.test(cc)){ col=c; break; } }
+      o.material = o.material.clone(); o.material.color.setHex(col); o.material.metalness=0.1; o.material.roughness=0.7; }
+    if(rainbow){ const h=(_ri*0.61803)%1; _ri++; const c=new THREE.Color().setHSL(h,0.65,0.55);
+      o.material = o.material.clone(); o.material.color.copy(c); o.material.metalness=0.05; o.material.roughness=0.75; o.userData._hue=h; }
     const b = new THREE.Box3().setFromObject(o);
     const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
-    const chain=[]; let p=o; while(p){ if(p.name) chain.push(p.name); p=p.parent; }
-    parts.push({ name:o.name||'(unnamed)', chain:compact(chain.join('/')),
+    parts.push({ name:o.name||'(unnamed)', chain:cc,
       c:[+c.x.toFixed(3),+c.y.toFixed(3),+c.z.toFixed(3)],
       s:[+s.x.toFixed(3),+s.y.toFixed(3),+s.z.toFixed(3)], key:o.userData.key });
+    if(frameRe && frameRe.test(cc)){ frameBox.union(b); frameAny=true; }
   });
   const whole = new THREE.Box3().setFromObject(model);
   const ws = whole.getSize(new THREE.Vector3()), wc = whole.getCenter(new THREE.Vector3());
 
-  // frame iso
-  const qs = new URLSearchParams(location.search);
-  const fit = qs.get('fit') || (location.hash.match(/fit=([\d.]+)/)||[])[1] || 1.0;
-  const view = qs.get('view') || (location.hash.match(/view=(\w+)/)||[])[1] || 'iso';
-  const out=makeSlot(); frameCamera(camera, box, view, 0, +fit, out);
+  const fit = qs.get('fit') || 1.0;
+  const view = qs.get('view') || 'iso';
+  const fb = frameAny ? frameBox : box;
+  const out=makeSlot(); frameCamera(camera, fb, view, 0, +fit, out);
   camera.position.copy(out.pos); camera.up.copy(out.up); camera.lookAt(out.target);
 
   window.__bm = { parts, whole:{ size:[+ws.x.toFixed(3),+ws.y.toFixed(3),+ws.z.toFixed(3)], center:[+wc.x.toFixed(3),+wc.y.toFixed(3),+wc.z.toFixed(3)] } };

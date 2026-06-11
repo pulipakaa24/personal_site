@@ -311,7 +311,7 @@
     <span class="eyebrow">ECE Honors · UT Austin</span>
     <h1>Aditya<br><span class="l2">Pulipaka</span></h1>
     <p class="lede">I thrive at the intersection of <b>hardware and software</b>, with experience in embedded systems, robotics,
-      controls, and computer vision.</p>
+      controls, and computer vision. I'm actively seeking interesting, multifaceted roles in these areas.</p>
     <div class="status"><span class="dot"></span><span class="status-roles"><span class="role">Currently: Embedded SWE Intern @ <b>Qualcomm</b></span><span class="sep">&nbsp;·&nbsp;</span><span class="role">Lev Subteam Lead @ <b>Guadaloop</b></span></span></div>
     <div class="cta">
       <a class="btn btn-solid" href="#work">View Work →</a>
@@ -406,8 +406,8 @@
           <span class="d3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>3D</span></div>
         <div class="meat">
           <div class="top"><h3>SmartPT</h3><span class="badge win">🏆 1st · Nexhacks</span></div>
-          <p class="sub">A PT app fusing camera 3D pose with an optional ESP32 IMU via an EKF for real-time
-            form feedback. Won the Healthcare track at CMU's Nexhacks; live on TestFlight.</p>
+          <p class="sub">A PT app fusing CV-based pose estimation with an optional 2-IMU brace via an EKF for 
+            recovery tracking. Won the Healthcare track at CMU's Nexhacks.</p>
           <div class="tags"><span class="tag">Flutter</span><span class="tag">EKF</span><span class="tag">Sensor Fusion</span></div>
           <span class="go">Open the 3D walkthrough →</span>
         </div>
@@ -419,8 +419,8 @@
           <span class="d3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>3D</span></div>
         <div class="meat">
           <div class="top"><h3>BlindMaster</h3></div>
-          <p class="sub">Full-stack IoT smart blinds — ESP32-C6 firmware, an Express + Socket.IO backend, and
-            a Flutter app, with BLE-only provisioning and end-to-end calibration. Solo.</p>
+          <p class="sub">Full-stack IoT smart blinds — XIAO ESP32-C6 using FreeRTOS, Express backend, and
+            a Flutter app, with an end-to-end user experience.</p>
           <div class="tags"><span class="tag">ESP32-C6</span><span class="tag">Embedded</span><span class="tag">Full-stack</span></div>
           <span class="go">Open the 3D walkthrough →</span>
         </div>
@@ -439,7 +439,7 @@
       <a class="card reveal d1" href="projects/tweinstein.html">
         <div class="top"><h3>TweinStein</h3><span class="badge win">🏆 1st · ECE445M Final Race</span></div>
         <p class="sub">An autonomous racer on a custom RTOS — PD wall-following, an RL residual, and a
-          heuristic overtaking state machine. Won the ECE445M final race.</p>
+          heuristic overtaking state machine. Won the ECE445M final race. (I developed the PD controller and classical logic, and we won without an RL model 👀)</p>
         <div class="tags"><span class="tag">RTOS</span><span class="tag">Robotics</span><span class="tag">Controls</span></div>
         <span class="go">Read case study →</span>
       </a>
@@ -448,7 +448,7 @@
       <a class="card reveal d1" href="projects/harmonium.html">
         <div class="top"><h3>Harmonium</h3><span class="badge win">Most Risky · TVG</span></div>
         <p class="sub">A browser-based instrument simulator with hand tracking so you can see and hear
-          yourself play before buying. "Most Risky Hack" at the TVG Vibeathon.</p>
+          yourself play (even learn!) without buying or making a trip to a store. "Most Risky Hack" at the TVG Vibeathon.</p>
         <div class="tags"><span class="tag">Web</span><span class="tag">Computer Vision</span><span class="tag">Audio</span></div>
         <span class="go">Read case study →</span>
       </a>
@@ -474,27 +474,28 @@
         <div class="when">May 2026 — Present · San Diego, CA</div>
         <h4>Embedded Software Engineer Intern · <span class="org">Qualcomm</span></h4>
         <p>Windows on Snapdragon. Extending device drivers to handle multiple clients and building a
-          testing framework for a laptop hinge sensor — driver/OS-level work.</p>
+          testing framework for the sensor suite. Driver/OS-level work.</p>
       </div>
       <div class="tl now reveal">
         <div class="when">Jan 2026 — Present · Austin, TX</div>
-        <h4>Undergraduate Researcher · <span class="org">UT Austin AMRL</span></h4>
-        <p>ROS system using the Spinnaker SDK to pull frames from networked FLIR Blackfly S cameras,
-          fuse multiple views, and output global pose estimates for people and robots — toward a
-          markerless multi-camera calibration pipeline.</p>
+        <h4>Computer Vision Researcher · <span class="org">UT Austin AMRL</span></h4>
+        <p>Built ROS2 system using the Spinnaker SDK to pull frames over limited bandwidth from
+          FLIR Blackfly S GigEVision cameras, fuse skeletons from multiple views, and output 
+          global pose estimates for people and robots. Now working toward a markerless multi-camera
+          calibration pipeline using humans as calibration targets.</p>
       </div>
       <div class="tl now reveal">
         <div class="when">Dec 2025 — Present · Austin, TX</div>
         <h4>EM Levitation Subteam Lead · <span class="org">Texas Guadaloop</span></h4>
-        <p>Leading control-algorithm development and a reinforcement-learning pipeline for the HEMS
-          levitation system.</p>
+        <p>Leading development of our control-algorithm and a repeatable formula for the HEMS
+          levitation success.</p>
       </div>
       <div class="tl reveal">
         <div class="when">Jun 2025 — Aug 2025 · Arlington, TX</div>
         <h4>Embedded SWE Intern, 525 Flight Control Systems · <span class="org">Bell Flight</span></h4>
         <p>Resolved 5+ software problem reports across FCS code and low-level tests; built a Python tool
           that migrated ~1000 high-level tests and comms databases between environments, saving an
-          estimated 6–12 months of manual work.</p>
+          estimated 6–12 months of manual work. Resolved 13 key issues with .NET windows app, gaining comfort with .NET C# code using WPF.</p>
       </div>
       <div class="tl reveal">
         <div class="when">May 2025 — Aug 2025 · Dallas, TX</div>
@@ -505,8 +506,9 @@
       <div class="tl reveal">
         <div class="when">Sep 2024 — May 2025 · Austin, TX</div>
         <h4>Software Team · <span class="org">Stampede — UT Austin RoboMaster</span></h4>
-        <p>Monocular localization pipeline for the Sentry robot using OpenCV SolvePnP; tested odometry
-          methods for tighter positioning.</p>
+        <p>Monocular localization pipeline for the Sentry robot using OpenCV SolvePnP on 
+          standardized markers; tested odometry methods for tighter positioning including 
+          dead-wheel and encoder.</p>
       </div>
       <div class="tl reveal">
         <div class="when">2023 — Earlier</div>

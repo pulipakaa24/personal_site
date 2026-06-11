@@ -3,13 +3,29 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Guadaloop Levitation Test Rig — Aditya Pulipaka</title>
+<title>Guadaloop Test Rig + LevSim — Aditya Pulipaka</title>
 <link rel="icon" href="../../assets/logo.png" />
 <link rel="stylesheet" href="../shared/viewer.css" />
+<!-- the LevSim case-study write-up below the storyboard reuses the SAME identity as
+     every project page (projects/*.html), so it reads as one consistent set. -->
+<link rel="stylesheet" href="../../assets/project.css" />
 <style>
-  body { height: 1500vh; }                                   /* room for the multi-stage storyboard */
+  /* storyboard scroll length (the fixed canvas plays through this height) */
+  #spacer { height: 1500vh; }                                /* room for the multi-stage storyboard */
   /* grouping-editor swatch colours (this viewer's editor assigns vis groups) */
   :root { --yoke:#ff6a00; --sensors:#19d3ff; --rails:#39ff88; --chassis:#ff3df0; --other:#8a8a8a; }
+
+  /* ---- LevSim case study (normal flow, scrolls in after the storyboard docks) ----
+     Styling comes from project.css; only the bits unique to the docked-viewer context
+     live here. #case sits at z5, BELOW the opaque docked card (z6), so page content
+     scrolls cleanly behind the model card. */
+  #case { position: relative; z-index: 5; padding: 15vh 0 4vh; }
+  #case .award { display:inline-block; border:1px solid var(--accent); color:var(--accent);
+                 border-radius:999px; padding:6px 14px; font-size:12px; letter-spacing:.12em;
+                 text-transform:uppercase; margin-bottom:1.5rem; }
+  /* keep the intro copy clear of the docked model card (top-right) */
+  #case .lede { font-size:clamp(19px,2.4vw,30px); line-height:1.33; font-weight:600;
+                letter-spacing:-.01em; color:rgba(255,255,255,.92); max-width:46ch; margin:0 0 8px; }
 </style>
 <script type="importmap">
 {
@@ -25,7 +41,7 @@
 <nav>
   <a class="brand" href="../../index.html"><img src="../../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
   <div class="navright">
-    <span class="lbl">Guadaloop Test Rig</span>
+    <span class="lbl">Guadaloop · Test Rig + LevSim</span>
     <a class="pbtn" href="../../index.html#work">← Back to work</a>
   </div>
 </nav>
@@ -36,6 +52,7 @@
 <div id="blurb"></div>
 <div id="dims"></div>
 <canvas id="c"></canvas>
+<div id="dockhint">Click to replay the 3D · minimise ›</div>
 
 <div id="hud-progress" class="hud">0%</div>
 <div id="scrollhint">scroll ↓</div>
@@ -57,10 +74,214 @@
 
 <div id="dump"><span class="x" id="dumpClose">✕ close</span><div style="margin-bottom:8px;font-size:12px;opacity:.7">Copied to clipboard. Paste this into <b>groups.json</b> (replace the whole file), then reload.</div><textarea id="dumpText" readonly></textarea></div>
 
+<!-- scroll length for the storyboard -->
+<div id="spacer"></div>
+
+<!-- LevSim case study (normal flow, scrolls in after the rig storyboard docks) -->
+<article id="case">
+  <div class="wrap">
+    <span class="award">Texas Guadaloop · Levitation Controls — Solo build</span>
+    <p class="lede">The rig above is the hard part to control. <b>LevSim</b> is the simulation environment I built so levitation controllers can be designed and tuned against the rig's <i>real</i> magnetic behaviour — not a hand-derived model that falls apart on contact with hardware.</p>
+
+    <dl class="facts reveal">
+      <div><dt>Role</dt><dd>Solo developer · Ansys work guided by Aditya Matam &amp; Neha Ramachandran</dd></div>
+      <div><dt>Timeline</dt><dd>Nov – Dec 2025</dd></div>
+      <div><dt>Stack</dt><dd>Ansys Electronics Desktop · SciKit-Learn · PyBullet · Gymnasium</dd></div>
+      <div><dt>Status</dt><dd>Functional prototype</dd></div>
+    </dl>
+
+    <section class="block reveal">
+      <h2>The problem</h2>
+      <p>Hybrid electromagnetic suspension (HEMS) is a proven low-power way to levitate, but it's
+        brutally nonlinear — and for a student team there's no clean way to simulate one without
+        re-deriving the magnetic flux through the whole structure (and the air around it) for every
+        design change. At best that's tedious; at worst it's a wall that keeps teams without
+        graduate-level magnetostatics from ever touching the control problem.</p>
+      <p>After two years on the lev sub-team I'd watched the same gap open again and again: controllers
+        that held rock-steady in our MATLAB sim under any disturbance fell apart on the real rig under
+        near-perfect conditions. We were missing a fundamental piece of the analytical model, and MATLAB
+        wasn't scaling past PID anyway. The fix was to stop hand-calculating forces and root the
+        simulation in empirical data instead — <b>Ansys FEA (verified against load-cell measurements) →
+        a polynomial force model → a PyBullet rigid-body sim</b>.</p>
+    </section>
+
+    <section class="block reveal">
+      <h2>System overview</h2>
+      <figure class="figure reveal">
+        <div style="padding:22px 16px; background:#0a0a0a">
+          <svg viewBox="0 0 900 570" role="img" aria-label="LevSim system architecture diagram" style="width:100%; height:auto; display:block">
+            <title>LevSim system architecture</title>
+            <desc>An offline Ansys FEA sweep of a single yoke is fit to a polynomial force model. At run time, Lev_pod_env.py orchestrates a loop: it reads pod state from PyBullet, converts controller output to coil currents with maglev_coil.py, queries the MagLev Predictor for per-yoke force and torque, and feeds those back into PyBullet — all wrapped in a Gymnasium interface a PID, LQR, or RL controller can drive.</desc>
+            <style>
+              .nd{fill:#101013;stroke:#ffffff2b;stroke-width:1.5}
+              .nd.acc{stroke:#ff6a00;stroke-width:1.8}
+              .t{fill:#fff;font-weight:700;font-size:15px}
+              .s{fill:#ffffff8c;font-size:10.5px}
+              .mono{font-family:ui-monospace,Menlo,Consolas,monospace;fill:#ff8a3a;font-size:10.5px}
+              .ln{stroke:#ffffff59;stroke-width:1.6;fill:none}
+              .lbl{fill:#ffffff8c;font-size:10px}
+              .lbl2{fill:#ffffff52;font-size:9.5px}
+              .load{stroke:#ff6a00;stroke-width:1.6;fill:none;stroke-dasharray:5 5}
+              .loadlbl{fill:#ff6a00;font-size:10px;font-weight:600}
+              svg text{text-anchor:middle;dominant-baseline:middle;font-family:"Helvetica Neue",Arial,sans-serif}
+            </style>
+            <defs>
+              <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6,3 L0,6 Z" fill="#ffffff99"/></marker>
+              <marker id="lah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6,3 L0,6 Z" fill="#ff6a00"/></marker>
+            </defs>
+
+            <!-- ===== offline strip: FEA sweep -> polynomial force model ===== -->
+            <rect class="nd" x="40"  y="44" width="168" height="60" rx="12"/>
+            <text class="t" x="124" y="68">Ansys FEA</text>
+            <text class="s" x="124" y="88">single-yoke magnetostatic</text>
+
+            <rect class="nd" x="300" y="44" width="200" height="60" rx="12"/>
+            <text class="t" x="400" y="68">Force / torque LUT</text>
+            <text class="s" x="400" y="88">4 states → force + torque</text>
+
+            <rect class="nd" x="590" y="44" width="210" height="60" rx="12"/>
+            <text class="t" x="695" y="66">Polynomial fit</text>
+            <text class="mono" x="695" y="88">Maglev_Model.pkl</text>
+
+            <line class="ln" x1="208" y1="74" x2="298" y2="74" marker-end="url(#ah)"/>
+            <text class="lbl" x="253" y="63">parametric sweep</text>
+            <line class="ln" x1="500" y1="74" x2="588" y2="74" marker-end="url(#ah)"/>
+            <text class="lbl" x="544" y="63">SciKit-Learn fit</text>
+
+            <!-- model loads (once) into the runtime predictor -->
+            <path class="load" d="M695,104 V150 H400 V178" marker-end="url(#lah)"/>
+            <text class="loadlbl" x="556" y="141">loaded at startup</text>
+
+            <!-- ===== runtime hub-and-spoke (240 Hz loop) ===== -->
+            <rect class="nd" x="300" y="180" width="200" height="64" rx="12"/>
+            <text class="t" x="400" y="202">MagLev Predictor</text>
+            <text class="s" x="400" y="221">state → force / torque</text>
+            <text class="lbl2" x="400" y="236">mini physics server</text>
+
+            <rect class="nd acc" x="300" y="300" width="200" height="104" rx="14"/>
+            <text class="t" x="400" y="332" font-size="16">Lev_pod_env.py</text>
+            <text class="s" x="400" y="356">Gymnasium env, connective tissue.</text>
+            <text class="s" x="400" y="376">implements sensor noise + reward</text>
+
+            <rect class="nd" x="30"  y="320" width="180" height="72" rx="12"/>
+            <text class="t" x="120" y="348">Controllers</text>
+            <text class="s" x="120" y="370">PID · LQR · RL</text>
+
+            <rect class="nd" x="690" y="320" width="180" height="72" rx="12"/>
+            <text class="t" x="780" y="348">PyBullet</text>
+            <text class="s" x="780" y="370">rigid-body dynamics · 240 Hz</text>
+
+            <rect class="nd" x="300" y="470" width="200" height="72" rx="12"/>
+            <text class="t" x="400" y="496">maglev_coil.py</text>
+            <text class="s" x="400" y="516">PWM → coil current</text>
+            <text class="lbl2" x="400" y="531">incl. inductive impedance</text>
+
+            <!-- predictor <-> env -->
+            <line class="ln" x1="388" y1="244" x2="388" y2="298" marker-end="url(#ah)"/>
+            <line class="ln" x1="412" y1="298" x2="412" y2="246" marker-end="url(#ah)"/>
+            <text class="lbl" x="464" y="262" text-anchor="start">↓ force, torque</text>
+            <text class="lbl" x="464" y="284" text-anchor="start">↑ state + currents</text>
+
+            <!-- env <-> controllers -->
+            <line class="ln" x1="298" y1="340" x2="212" y2="340" marker-end="url(#ah)"/>
+            <text class="lbl" x="255" y="329">state + reward</text>
+            <line class="ln" x1="212" y1="372" x2="298" y2="372" marker-end="url(#ah)"/>
+            <text class="lbl" x="255" y="387">control output</text>
+
+            <!-- env <-> pybullet -->
+            <line class="ln" x1="500" y1="340" x2="688" y2="340" marker-end="url(#ah)"/>
+            <text class="lbl" x="594" y="329">per-step force / torque</text>
+            <line class="ln" x1="688" y1="372" x2="500" y2="372" marker-end="url(#ah)"/>
+            <text class="lbl" x="594" y="387">physical state of pod</text>
+
+            <!-- env <-> coil model -->
+            <line class="ln" x1="388" y1="404" x2="388" y2="468" marker-end="url(#ah)"/>
+            <line class="ln" x1="412" y1="468" x2="412" y2="406" marker-end="url(#ah)"/>
+            <text class="lbl" x="464" y="424" text-anchor="start">↓ analog PWM</text>
+            <text class="lbl" x="464" y="452" text-anchor="start">↑ coil current</text>
+          </svg>
+        </div>
+        <figcaption>Two-phase architecture: an Ansys FEA sweep of a single yoke is distilled offline
+          into a polynomial force model, which a 240&nbsp;Hz runtime loop (<code>Lev_pod_env.py</code> ⇄
+          PyBullet) queries every step while a controller drives the pod. Redrawn from the project's
+          dataflow diagram.</figcaption>
+      </figure>
+      <p>The pipeline splits in two. <b>Offline</b>, an Ansys magnetostatic model of a single yoke is
+        swept across the coil currents, gap heights and roll angles the rig actually sees; the resulting
+        force/torque table is fit to a polynomial (<code>Maglev_Model.pkl</code>) so it can be evaluated
+        in microseconds. <b>At run time</b>, <code>Lev_pod_env.py</code> is the orchestrator: each step it
+        pulls the pod's state from PyBullet, converts the controller's analog output into real coil
+        currents with <code>maglev_coil.py</code>, asks the MagLev Predictor for the per-yoke force and
+        torque, and feeds those point loads back into PyBullet — all wrapped in a Gymnasium interface so
+        any controller can drive it.</p>
+    </section>
+
+    <section class="block reveal">
+      <h2>Decisions &amp; deep dives</h2>
+      <div class="dives">
+        <div class="dive">
+          <h3>Why FEA, not an analytical model?</h3>
+          <p>I first proved FEA was trustworthy: a load-cell setup measured the force on a single small
+            yoke, and Ansys magnetostatic results at the same gaps agreed within ~10%. That made an
+            FEA-derived lookup a reliable replacement for the broken analytical chain.</p>
+        </div>
+        <div class="dive">
+          <h3>Why a polynomial on top of FEA?</h3>
+          <p>Running Ansys inside the sim loop is infeasible. A parametric sweep across the rig's working
+            range of heights, roll angles and coil currents gives a discrete table; fitting it in
+            SciKit-Learn (<code>lev_sim/Function Fitting.ipynb</code>) turns each step into a cheap
+            polynomial evaluation — and makes the pipeline plug-and-play for new yoke designs.</p>
+        </div>
+        <div class="dive">
+          <h3>Why PyBullet + Gymnasium?</h3>
+          <p>PyBullet handles the rigid-body dynamics; a custom <code>maglev_coil</code> component models
+            coil current (including inductive impedance) so the force model gets <i>real</i> currents. Our
+            LUT-fit polynomial model ensures we have FEA-backed force and torque driving our simulation, and
+            Gymnasium standardizes the interface, so the same environment runs under PID
+            (<code>lev_PID</code>) or RL (<code>lev_PPO</code>).</p>
+        </div>
+        <div class="dive">
+          <h3>How do you reuse it across controllers?</h3>
+          <p><code>lev_pod_env.py</code> exposes exactly the I/O a controller sees on the real pod —
+            distance-sensor readings in, motor-controller PWM out — so anything written against the sim
+            can move straight onto the rig with no interface changes.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block reveal">
+      <h2>Results &amp; honest limits</h2>
+      <ul>
+        <li>A 240&nbsp;Hz simulation, grounded in FEA data and validated end-to-end with both a hand-tuned
+          <b>PID</b> loop and a trained <b>PPO</b> policy.</li>
+        <li>The force model is only as good as the swept range — extrapolate far outside it and the
+          polynomial is unreliable.</li>
+        <li>It's a functional prototype: the coil model is a simplification, and fully closing the
+          sim-to-real gap still wants back-to-back runs on the physical rig.</li>
+      </ul>
+    </section>
+
+    <section class="block reveal">
+      <h2>Media &amp; artifacts</h2>
+      <div class="actions">
+        <a class="btn" href="https://youtu.be/b1LHZhLbZhc" target="_blank" rel="noopener">▶ Clean run (0:08)</a>
+        <a class="btn" href="https://youtu.be/4QhSVZc7bHg" target="_blank" rel="noopener">▶ Early instability (0:42)</a>
+        <a class="btn" href="https://youtu.be/McGaIZm4ikw" target="_blank" rel="noopener">▶ Full walkthrough (8:22)</a>
+        <a class="btn" href="https://github.com/pulipakaa24/guadaloop_lev_control" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </section>
+  </div>
+
+  <footer class="wrap">
+    <a href="../../index.html#work">← All work</a>
+    <a href="../rescuevision/index.html">Next: RescueVision →</a>
+  </footer>
+</article>
+
 <script type="module">
 import {
   createStudioScene, loadGLB, prepareMeshes, centerModel, setOpacity,
-  frameCamera, makeVis, Storyboard, projectPoint, trapUpDown, clamp01, THREE
+  frameCamera, makeVis, Storyboard, DockController, projectPoint, trapUpDown, clamp01, THREE
 } from '../shared/engine.js';
 
 const canvas = document.getElementById('c');
@@ -103,8 +324,8 @@ const ruleGroup = (name) => { for (const [g,re] of RULES) if (re.test(name)) ret
 let meshes = [], chapters = [];
 const boxes = {};
 const MOVERS = [];
-let editMode = false, progress = 0, shownProgress = 0;
-let story = null;
+let editMode = false;
+let story = null, dock = null;   // dock = shared dock-to-case-study shell (scroll map + dock)
 const dimsEl = document.getElementById('dims');
 
 // ---------- load ----------
@@ -143,6 +364,8 @@ async function start(){
   boxes.yoke = boxOf(['yokecore','coil']); boxes.sensors = boxOf(['sensormod','sensorholder']);
   boxes.rails = boxOf(['railbar','railslider','railholder','railtrack']); boxes.chassis = boxOf(['chassis']);
   boxes.sizeY = boxes.all.getSize(new THREE.Vector3()).y;
+  { const _s = (b,n) => { const v = b.getSize(new THREE.Vector3()); console.log(`[dims] ${n}: W=${v.x.toFixed(4)} H=${v.y.toFixed(4)} D=${v.z.toFixed(4)} (model units)`); };
+    _s(boxes.all,'all'); _s(boxes.yoke,'yoke'); _s(boxes.sensors,'sensors'); _s(boxes.rails,'rails'); }
 
   // the travelling "sled": chassis + carried parts + lower carriages
   const MOVE_VG = new Set(['chassis','yokecore','coil','sensormod','sensorholder']);
@@ -159,11 +382,11 @@ async function start(){
   chapters = [
     { r:[0.00,0.07], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'hero'}, blurb:'', dims:null },
     { r:[0.07,0.17], box:'yoke', view:'iso',  pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
-      panel:side('yoke','Two U-shaped 1020 carbon steel cores wrapped with the copper coils at either end to modulate force.','Placeholder copy'), dims:null },
+      panel:side('yoke','Two U-shaped 1020 carbon steel cores wrapped with the copper coils at either end to modulate attractive force.','Isometric View'), dims:null },
     { r:[0.17,0.26], box:'yoke', view:'front', pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
-      panel:side('yoke','Head-on: the working air-gap faces of the cores. Dimensions are placeholders pending the real drawing.','Front elevation'), dims:'yokeFront' },
+      panel:side('yoke','These yokes have the same width and height as the full-size yokes on our large pod. In fact, those are just 9 of these stacked together face-to-face!','Front View'), dims:'yokeFront' },
     { r:[0.26,0.34], box:'yoke', view:'top',  pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
-      panel:side('yoke','Top-down: core spacing and coil footprint. Placeholder dimensions.','Plan view'), dims:'yokeTop' },
+      panel:side('yoke','The yokes are spaced sufficiently to allow good pitch control and represent an actual single side of our levitation pod. Though we sacrificed roll control with the yoke width and lack of 4 yokes (difficult to test with our resources due to higher forces), we retained pitch control here.','Top-Down'), dims:'yokeTop' },
     { r:[0.34,0.40], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, fade:LATE },
     { r:[0.40,0.48], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:1}),
       panel:side('sensors','Our team opted for inductive sensors due to their price point and performance at close proximity. We\'re guaranteed to have a steel track, so why not make the most of it?','Isometric View'), dims:null },
@@ -178,9 +401,11 @@ async function start(){
       panel:side('rails','Zero-tolerance "press-fit" style clamps grasp the track to eliminate uncontrolled movements.','Stage 2 · track mounting'), dims:null },
     { r:[0.85,0.91], box:'all', view:'iso', pan:0.35, vis:vis({ALL:1}),
       panel:side('rails','Together, the track, rails, and chassis allow us to rapidly prototype our control algorithms in a safe way.','Stage 3 · assembled'), dims:null },
-    { r:[0.91,1.00], box:'all', view:'iso', pan:0, vis:vis({ALL:1}),
+    { r:[0.91,0.97], box:'all', view:'iso', pan:0, vis:vis({ALL:1}),
       panel:side('rails','With sticking and bottom-out protection offered by the slide rails, we can ensure our algorithm is robust before moving to pitch and roll control','Stage 4 · movement'),
       dims:null, motion:{ amp:0.16 } },
+    // settle — clean assembled iso, framed (fit 2.0) to match the docked card, ready to dock into the LevSim case study
+    { r:[0.97,1.00], box:'all', view:'iso', pan:0, fit:2.0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
   ];
 
   story = new Storyboard({
@@ -188,6 +413,12 @@ async function start(){
     els: { title:document.getElementById('title'), panel:document.getElementById('panel'), blurb:document.getElementById('blurb'), dims:dimsEl, hud:document.getElementById('hud-progress') },
     sections: SECTION,
     hooks: { onResolve: ({ i, localT }) => applyMotion(i, localT), drawDims }
+  });
+
+  // shared dock-to-case-study shell (scroll map, canvas dock, smooth rotisserie hand-off)
+  dock = new DockController({
+    canvas, renderer, camera, spacer: document.getElementById('spacer'),
+    getBox: () => boxes.all, onStory: (p) => story.resolve(p)
   });
 
   controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
@@ -204,23 +435,38 @@ function applyMotion(i, localT){
 }
 
 // ---------- dimension overlay ----------
+// UNIT: model-units → mm conversion (1 if GLB exported in mm, 1000 if meters)
+const UNIT = 1000; // GLB is in meters; ×1000 → mm
+const fmtDim = (v) => `${(v * UNIT).toFixed(0)} mm`;
 function drawDims(kind){
   const box = kind.startsWith('yoke') ? boxes.yoke : kind.startsWith('sensor') ? boxes.sensors : boxes.all;
   const mn = box.min, mx = box.max, V = THREE.Vector3, segs = [];
   if (kind.endsWith('Front')){ const z = mx.z;
-    segs.push([ new V(mn.x,mn.y,z), new V(mx.x,mn.y,z), 'W —— mm' ]); segs.push([ new V(mn.x,mn.y,z), new V(mn.x,mx.y,z), 'H —— mm' ]);
+    segs.push([ new V(mn.x,mn.y,z), new V(mx.x,mn.y,z), `W ${fmtDim(mx.x-mn.x)}` ]); segs.push([ new V(mn.x,mn.y,z), new V(mn.x,mx.y,z), `H ${fmtDim(mx.y-mn.y)}` ]);
   } else { const y = mx.y;
-    segs.push([ new V(mn.x,y,mn.z), new V(mx.x,y,mn.z), 'W —— mm' ]); segs.push([ new V(mn.x,y,mn.z), new V(mn.x,y,mx.z), 'D —— mm' ]); }
+    segs.push([ new V(mn.x,y,mn.z), new V(mx.x,y,mn.z), `W ${fmtDim(mx.x-mn.x)}` ]); segs.push([ new V(mn.x,y,mn.z), new V(mn.x,y,mx.z), `D ${fmtDim(mx.z-mn.z)}` ]); }
+  const ctr = projectPoint(camera, box.getCenter(new THREE.Vector3()));
   let s = `<svg viewBox="0 0 ${innerWidth} ${innerHeight}">`;
   for (const [pa,pb,label] of segs){ const a = projectPoint(camera,pa), b = projectPoint(camera,pb), cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
     s += `<line class="dl" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
     s += `<circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="2.5" fill="#fff"/><circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="2.5" fill="#fff"/>`;
-    s += `<text class="dt" x="${cx.toFixed(1)}" y="${(cy-7).toFixed(1)}" text-anchor="middle">${label}</text>`; }
+    const horiz = Math.abs(b.x-a.x) >= Math.abs(b.y-a.y);
+    const OFF = 16;
+    let tx, ty, rot = '';
+    if (horiz) {
+      const out = cy < ctr.y ? -1 : 1; // above center → up (−), below → down (+)
+      tx = cx; ty = cy + OFF * out;
+    } else {
+      const out = cx < ctr.x ? -1 : 1; // left of center → left (−), right → right (+)
+      tx = cx + OFF * out; ty = cy;
+      rot = ` transform="rotate(${out*90},${tx.toFixed(1)},${ty.toFixed(1)})"`;
+    }
+    s += `<text class="dt" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle"${rot}>${label}</text>`; }
   dimsEl.innerHTML = s + `</svg>`;
 }
 
 // ---------- scroll input ----------
-addEventListener('scroll', () => { const max = document.body.scrollHeight - innerHeight; progress = max > 0 ? Math.min(Math.max(scrollY/max,0),1) : 0; }, { passive:true });
+// (the shared DockController owns the scroll → progress/dockK mapping now)
 
 // ---------- grouping editor ----------
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
@@ -231,8 +477,11 @@ function applyEditColors(on){
     setOpacity(m, 1); }
 }
 function enterEdit(){ editMode = true; document.body.classList.add('editing'); controls.enabled = true; controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
+  // restore a full-screen canvas in case the editor is opened while docked into the case study
+  const cv = renderer.domElement; cv.classList.remove('docked','collapsed'); cv.style.cssText = '';
+  renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
   const A = { pos:new THREE.Vector3(), target:new THREE.Vector3(), up:new THREE.Vector3() }; frameCamera(camera, boxes.all, 'iso', 0, 1.6, A); camera.up.set(0,1,0); camera.position.copy(A.pos); camera.lookAt(controls.target); applyEditColors(true); }
-function exitEdit(){ editMode = false; document.body.classList.remove('editing'); controls.enabled = false; applyEditColors(false); story.resolve(progress); }
+function exitEdit(){ editMode = false; document.body.classList.remove('editing'); controls.enabled = false; applyEditColors(false); story.resolve(dock.shownProgress); }
 addEventListener('keydown', (ev) => { const k = ev.key.toLowerCase(); if (k === 'g') editMode ? exitEdit() : enterEdit(); if (k === 'e' && editMode) exportJSON(); });
 renderer.domElement.addEventListener('click', (ev) => {
   if (!editMode) return; const r = renderer.domElement.getBoundingClientRect();
@@ -249,10 +498,13 @@ document.getElementById('exportBtn').addEventListener('click', exportJSON);
 document.getElementById('dumpClose').addEventListener('click', () => document.getElementById('dump').style.display='none');
 
 // ---------- loop ----------
+// The shared DockController (created in start()) owns the scroll→dock mapping, the
+// canvas dock lerp, the overlay fade, the #case reveal observer, and the docked
+// rotisserie. The loop just drives editor vs dock.
 function tick(){
   requestAnimationFrame(tick);
   if (editMode){ controls.update(); }
-  else if (story){ shownProgress += (progress - shownProgress) * 0.12; story.resolve(shownProgress); }
+  else if (story && dock){ dock.update(); }
   updateHeadlights();
   renderer.render(scene, camera);
 }

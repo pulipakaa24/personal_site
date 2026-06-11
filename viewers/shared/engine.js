@@ -425,6 +425,12 @@ export class DockController {
 
     this._buildDockUI();
     this.layout();
+    // Initialise dockK/progress from the CURRENT scroll position. Otherwise dockK is only
+    // ever set by the scroll listener, so a reload (or back-nav) while scrolled into the
+    // case study leaves dockK=0 → the full-screen storyboard renders "active" behind #case
+    // until the user nudges the scroll. Snap shownProgress too so there's no fast-forward sweep.
+    this._onScroll();
+    this.shownProgress = this.progress;
     addEventListener('resize', () => this.layout());
     addEventListener('scroll', () => this._onScroll(), { passive:true });
     this.observeReveals();

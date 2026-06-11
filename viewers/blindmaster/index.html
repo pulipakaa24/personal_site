@@ -55,11 +55,11 @@
 
 <div id="hud-progress" class="hud">0%</div>
 <div id="scrollhint">scroll ↓</div>
-<div id="hint">press <b>G</b> for the appearance editor</div>
+<div id="hint">press <b>G</b> to assign part groups</div>
 
-<!-- editor shell (filled by AppearanceEditor) -->
+<!-- editor shell (filled by the grouping editor — press G) -->
 <div id="editor"><div id="legend"></div><div id="picked">click a part…</div></div>
-<div id="dump"><span class="x" id="dumpClose">✕ close</span><div style="margin-bottom:8px;font-size:12px;opacity:.7">Copied to clipboard. Save this as <b>appearance.json</b> in this folder, then reload.</div><textarea id="dumpText" readonly></textarea></div>
+<div id="dump"><span class="x" id="dumpClose">✕ close</span><div style="margin-bottom:8px;font-size:12px;opacity:.7">Copied to clipboard. Save this as <b>groups.json</b> in this folder, then reload.</div><textarea id="dumpText" readonly></textarea></div>
 
 <!-- scroll length for the storyboard -->
 <div id="spacer"></div>
@@ -214,9 +214,8 @@
 <script type="module">
 import {
   createStudioScene, loadGLB, prepareMeshes, centerModel, setOpacity,
-  frameCamera, makeVis, Storyboard, DockController, pca, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, THREE
+  frameCamera, makeSlot, makeVis, Storyboard, DockController, pca, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, THREE
 } from '../shared/engine.js';
-import { AppearanceEditor, applyAppearance } from '../shared/appearance.js';
 
 const canvas = document.getElementById('c');
 const { renderer, scene, camera, controls, updateHeadlights } = createStudioScene(canvas, { exposure: 1.0, near: 0.0005, far: 50 });
@@ -225,24 +224,33 @@ const { renderer, scene, camera, controls, updateHeadlights } = createStudioScen
 const VG = ['servo','drive','encgear','enc','bottomhook','xiao','battery','power','pcb','box','plate','other'];
 const vis = makeVis(VG);
 const TRANS = 0.14;
-// classify a mesh by walking its ancestor name chain. GLTFLoader strips spaces &
-// dots, so compact the chain to alnum before matching (see CLAUDE.md §5).
-function classify(o){
+// Classify each part: groups.json OVERRIDE (built with the G editor) → name RULE →
+// 'other'. The corrected GLB keeps the original descriptive CAD names, so the name
+// rules do almost everything; the editor is just for fixing the odd straggler.
+let GROUPS = {};
+function classify(o){ return GROUPS[o.name] || ruleClassify(o) || 'other'; }
+function ruleClassify(o){
   let names = [], n = o; while (n){ if (n.name) names.push(n.name); n = n.parent; }
-  const p = names.join('/').replace(/[^a-z0-9]/gi,'').toLowerCase();
+  const p = names.join('/').replace(/[^a-z0-9]/gi,'').toLowerCase();   // GLTFLoader strips spaces/dots
   if (/crservo/.test(p))                      return 'servo';
   if (/hookwithgear/.test(p))                 return 'drive';      // servo-side hook + gear
   if (/encodergear/.test(p))                  return 'encgear';    // gear that drives the rotary encoder
   if (/encoderec12e24204a2/.test(p))          return 'enc';        // the two EC12 rotary encoders
-  if (/blindsbottomhook/.test(p))             return 'bottomhook';
-  if (/seeed|xiao|esp32c6|esp32s3/.test(p))   return 'xiao';
+  if (/blindsbottomhook/.test(p))             return 'bottomhook'; // independent manual wand
+  if (/xiaopcbplaceholder/.test(p))           return 'pcb';        // MUST precede /xiao/ (name contains "xiao")
+  if (/seeed|xiao|esp32c6|esp32s3/.test(p))   return 'xiao';       // the XIAO module (in place in this GLB)
   if (/lipo|batteryholder|phr2forbattery/.test(p)) return 'battery';
   if (/stepupplaceholder/.test(p))            return 'power';      // boost converter
-  if (/toppcb|bottompcbreal|xiaopcbplaceholder/.test(p)) return 'pcb';
+  if (/toppcb|bottompcbreal/.test(p))         return 'pcb';
   if (/boxtop/.test(p))                       return 'plate';      // large flat panel (mounting plate, hinged)
   if (/boxbottom/.test(p))                    return 'box';        // main enclosure body
-  return 'other';
+  return null;
 }
+// editor swatch colours (also used by #dbg)
+const GROUP_COLORS = {
+  servo:0xff6a00, drive:0xffd000, encgear:0x00d0ff, enc:0x19d3ff, bottomhook:0xff3b6b,
+  xiao:0x57e07a, battery:0xb070ff, power:0xff9a3a, pcb:0x2ecc71, box:0x8899aa, plate:0xe8e8ec, other:0x3a3f47
+};
 
 const SECTION = {
   form:  { kick:'Form factor · 01', title:'Pocket<br>Sized' },
@@ -275,8 +283,8 @@ const _R = new THREE.Matrix4(), _Ry = new THREE.Matrix4(), _T1 = new THREE.Matri
       _T2 = new THREE.Matrix4(), _W = new THREE.Matrix4(), _L = new THREE.Matrix4();
 
 // ---------- load ----------
-let APPEARANCE = null;
-fetch('appearance.json').then(r => r.ok ? r.json() : null).then(j => APPEARANCE = j).catch(()=>{}).finally(start);
+fetch('groups.json').then(r => r.ok ? r.json() : null)
+  .then(j => { GROUPS = (j && j.groups) ? j.groups : (j || {}); }).catch(()=>{}).finally(start);
 
 async function start(){
   let gltf;
@@ -291,12 +299,6 @@ async function start(){
     }
   });
   for (const o of meshes) o.userData.vis = classify(o);
-
-  // The detailed Seeed XIAO module is modeled exploded/floating OUTSIDE the box (its
-  // board + RF shield flew off to the back-right). The `xiaoPCB placeholder` (in the
-  // 'pcb' group) already sits correctly inside the box AND carries the Seeed/ESP32C6
-  // silkscreen label — it's the right stand-in. Drop the floating module entirely.
-  meshes = meshes.filter(m => { if (m.userData.vis === 'xiao'){ m.visible = false; return false; } return true; });
 
   // ---- orientation ----
   // The GLB appears to ship Y-up already (mounting hook toward +Y). Default to a
@@ -320,13 +322,14 @@ async function start(){
   for (const g of VG){ boxes[g] = groupBox(g); centers[g] = boxes[g].getCenter(new THREE.Vector3()); }
   // composite framing boxes
   boxes.mech = boxes.servo.clone().union(boxes.drive).union(boxes.encgear).union(boxes.enc).union(boxes.bottomhook);
-  boxes.elecTop = boxes.pcb.clone().union(boxes.servo);   // xiao module hidden → frame the placeholder PCB + servo
+  boxes.elecTop = boxes.xiao.clone().union(boxes.pcb).union(boxes.servo);
   boxes.elecBot = boxes.battery.clone().union(boxes.power);
 
   buildDrivetrain(model);
+  buildPlateLift(model);
+  buildFinale();
 
   if (DBG) colorByGroup();
-  applyAppearance(meshes, APPEARANCE);
 
   defineChapters();
   story = new Storyboard({
@@ -336,28 +339,21 @@ async function start(){
     hooks: { onResolve, drawDims }
   });
 
-  editor = new AppearanceEditor({
-    renderer, scene, camera, controls, meshes, boxes,
-    toggleKey:'g', initial: APPEARANCE, onAfter: () => story.resolve(dock.shownProgress)
-  });
-  document.getElementById('dumpClose').addEventListener('click', () => document.getElementById('dump').style.display='none');
-
   dock = new DockController({
     canvas, renderer, camera, spacer: document.getElementById('spacer'),
     getBox: () => boxes.all, onStory: (p) => story.resolve(p)
   });
+
+  setupGroupEditor();
 
   controls.target.copy(ctrAll);
   story.resolve(0);
   document.getElementById('loader').classList.add('hidden');
 }
 
-// debug: tint each vis-group a distinct hue so classify() can be eyeballed (#dbg)
+// debug: tint each vis-group a distinct hue so the grouping can be eyeballed (#dbg)
 function colorByGroup(){
-  const HUE = { servo:0xff6a00, drive:0xffd000, encgear:0x00d0ff, enc:0x19d3ff, bottomhook:0xff3b6b,
-    xiao:0x57e07a, battery:0xb070ff, power:0xff9a3a, pcb:0x2ecc71, box:0x8899aa, plate:0xdddddd, other:0x444444 };
-  for (const m of meshes){ const c = HUE[m.userData.vis] ?? 0x444444;
-    m.material.color.setHex(c); m.material.metalness = 0.1; m.material.roughness = 0.7; }
+  for (const m of meshes){ paintByGroup(m, m.userData.vis); m.material.metalness = 0.1; m.material.roughness = 0.7; }
 }
 
 // ---------- chapters ----------
@@ -369,12 +365,12 @@ function defineChapters(){
 
     // 01 · form factor — a couple of swung views, dimension call-outs
     { r:[0.06,0.15], box:'all', view:'iso', pan:0.42, vis:vis({ALL:1}),
-      panel:side('form','The whole hub is about 90&nbsp;×&nbsp;132&nbsp;×&nbsp;63&nbsp;mm — smaller than a phone. Everything (servo, drivetrain, battery and the ESP32-C6) lives in one palm-sized enclosure.','~90 × 132 × 63 mm'), dims:'size' },
+      panel:side('form','The whole hub is about 90&nbsp;×&nbsp;132&nbsp;×&nbsp;40&nbsp;mm — smaller than a phone. Everything (servo, drivetrain, battery and the ESP32-C6) lives in one palm-sized enclosure.','~90 × 132 × 40 mm'), dims:'size' },
     { r:[0.15,0.22], box:'all', view:'side', pan:0.42, vis:vis({ALL:1}),
       panel:side('form','Slim enough to sit flush against a window frame, deep enough to fit a LiPo and the drivetrain behind the faceplate.','Slim profile'), dims:'size' },
 
     // 02 · mounting plate hinges
-    { r:[0.22,0.32], box:'plate', view:'iso', pan:0.42, vis:vis({ALL:TRANS, plate:1, box:0.4}),
+    { r:[0.22,0.32], box:'plate', view:'iso', pan:0.42, act:'mount', vis:vis({ALL:TRANS, plate:1, box:0.4}),
       panel:side('mount','The back plate clips the hub to the blind’s headrail. Modeled here swinging about its mounting hinge.','Clips on'), dims:null },
 
     // 03 · drivetrain + position payoff (box translucent) — scroll-tied gears + slats
@@ -383,24 +379,24 @@ function defineChapters(){
       panel:side('drive','A continuous-rotation servo turns the hook-gear; a meshed encoder gear feeds the rotary encoder that counts ticks — 1:1, opposite directions. The bottom hook is a separate manual wand: turn the blind by hand and the servo follows.','Tilt & track'), dims:'drive' },
     { r:[0.50,0.62], box:'mech', view:'iso', pan:0.30, act:'drive',
       vis:vis({ALL:TRANS, servo:1, drive:1, encgear:1, enc:1, bottomhook:1}),
-      panel:side('drive','One 0–10 model (5 = open): each step is a full gear turn, so the encoder counts across the blind’s real travel — calibrated, then shared verbatim across the firmware, server and app.','0 → 5 → 10'), dims:'drive' },
+      panel:side('drive','One 0–10 model (5 = open): each step is half a gear turn, so the encoder counts across the blind’s real travel — calibrated, then shared verbatim across the firmware, server and app.','0 → 5 → 10'), dims:'drive' },
 
     // back to assembly
     { r:[0.62,0.68], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
 
     // 04 · electronics — top / servo side
-    { r:[0.68,0.78], box:'elecTop', view:'iso', pan:0.42, vis:vis({ALL:TRANS, pcb:1, servo:1}),
+    { r:[0.68,0.78], box:'elecTop', view:'iso', pan:0.42, vis:vis({ALL:TRANS, xiao:1}),
       panel:side('elec','A Seeed XIAO ESP32-C6 runs the show — ESP-IDF + FreeRTOS, NimBLE for setup, Socket.IO for control — seated on the top PCB beside the servo, with the USB-C port out the side for flashing and charging.','XIAO ESP32-C6'), dims:null },
     // 05 · electronics — bottom / battery side + power story
-    { r:[0.78,0.88], box:'elecBot', view:'isoL', pan:0.42, vis:vis({ALL:TRANS, battery:1, power:1, pcb:0.5}),
+    { r:[0.78,0.86], box:'elecBot', view:'isoL', pan:0.42, vis:vis({ALL:TRANS, battery:1, power:1, pcb:0.5, xiao:1}),
       panel:side('power','A LiPo feeds a boost converter; a MAX17048 fuel gauge reports state-of-charge. Dynamic frequency scaling + light sleep + GPIO-gated servo power keep idle draw low.','Battery + BMS'), dims:null },
 
-    // 06 · full-stack finale (placeholder framing; actors wired next)
-    { r:[0.88,0.95], box:'all', view:'iso', pan:0, fit:1.6, vis:vis({ALL:1}),
+    // 06 · full-stack finale — app ↔ server ↔ hub relay, BLE arc, live command
+    { r:[0.86,0.96], box:'finale', view:'iso', pan:0.04, fit:1.45, vis:vis({ALL:1}),
       panel:side('system','One node in a full stack: the Flutter app and ESP32-C6 hubs talk only through the Express server (Socket.IO/HTTP over TLS); BLE links the phone to the device for one-time provisioning.','App ↔ Server ↔ Hub'), dims:null, finale:true },
 
     // settle — clean iso, framed for the dock
-    { r:[0.95,1.00], box:'all', view:'iso', pan:0, fit:2.0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
+    { r:[0.96,1.00], box:'all', view:'iso', pan:0, fit:2.0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
   ];
 }
 
@@ -434,6 +430,7 @@ function buildDrivetrain(model){
   for (const g of [dg, eg]) g.mesh.matrixAutoUpdate = false;
   drivetrain = { drive: dg, enc: eg };
 }
+
 // rotate one gear about world +Y through its pivot by `angle` (radians); angle 0 = base.
 function spinGear(g, angle){
   _Ry.makeRotationY(angle);
@@ -443,6 +440,28 @@ function spinGear(g, angle){
   _W.multiplyMatrices(_R, g.base);               // world = R · base
   _L.multiplyMatrices(g.parentInv, _W);          // local = parentInv · world
   g.mesh.matrix.copy(_L); g.mesh.updateMatrixWorld(true);
+}
+
+// ---------- mounting-plate lift ----------
+// The mounting plate (BoxTop) lifts straight UP and neatly back DOWN (pure linear
+// translation along world +Y, no rotation). Rest = 0 at the beat edges (like the
+// gears) so it returns to the modeled pose for the neighbouring beats.
+let plateLift = null;
+const _liftT = new THREE.Matrix4(), _liftL = new THREE.Matrix4();
+const PLATE_LIFT = (location.hash.match(/platelift=(-?[\d.]+)/) || [,0.22])[1] * 1;   // ×S
+function buildPlateLift(model){
+  const plate = meshes.filter(m => m.userData.vis === 'plate');
+  if (!plate.length) return;
+  model.updateMatrixWorld(true);
+  const movers = plate.map(m => ({ mesh:m, base:m.matrixWorld.clone(), parentInv:m.parent.matrixWorld.clone().invert() }));
+  for (const mv of movers) mv.mesh.matrixAutoUpdate = false;
+  plateLift = { movers };
+}
+function liftPlate(dy){
+  if (!plateLift) return;
+  _liftT.makeTranslation(0, dy, 0);
+  for (const mv of plateLift.movers){ _liftL.multiplyMatrices(_liftT, mv.base).premultiply(mv.parentInv);
+    mv.mesh.matrix.copy(_liftL); mv.mesh.updateMatrixWorld(true); }
 }
 
 // scroll-tied position over the drivetrain act: open → close-down → close-up →
@@ -464,19 +483,70 @@ const DRIVE_R = [0.32, 0.62];   // global scroll range of the two drivetrain bea
 
 // ---------- per-frame hook ----------
 function onResolve({ p, i, c, localT }){
-  if (!drivetrain) return;
-  // position 0..10 over the drivetrain act, else rest at open (gears at base)
-  curPos = (c.act === 'drive')
-    ? posAt((p - DRIVE_R[0]) / (DRIVE_R[1] - DRIVE_R[0]))
-    : 5;
-  // anchor rotation at pos 5 (the resting pose) → base orientation when open
-  const ang = (curPos - 5) * STEP_TURNS * Math.PI * 2;
-  spinGear(drivetrain.drive,  ang);
-  spinGear(drivetrain.enc,   -ang);     // 1:1, opposite
+  // mounting plate: lift straight up & neatly back down during the mount beat (0 at edges)
+  liftPlate(c.act === 'mount' ? PLATE_LIFT * S * Math.sin(Math.PI * clamp01(localT)) : 0);
+
+  // finale: present from the finale beat onward (through the settle + dock, so it doesn't
+  // pop), then fades out as the model docks — like the title (bidirectional via dockK).
+  // fade over dockK ∈ [0, 0.8] — the DockController stops resolving the storyboard (and so
+  // stops calling this) at dockK ≥ 0.8, so the actors must be fully gone by then.
+  const inFin = p >= FIN_START - 0.005;
+  // Use dock.progress (un-smoothed raw scroll) rather than p (shownProgress, which lags
+  // behind by a significant amount due to the 0.12 smoothing factor). dockK=0 is at
+  // rawP≈0.961, so fading rawP 0.92→0.96 guarantees finFade=0 BEFORE the canvas starts
+  // shrinking for any scroll speed. For a typical scroller rawP≈p, so the fade aligns
+  // with the panel/"END TO END" text fade (which starts at localT≈0.72 of this beat,
+  // p≈0.932). inFin stays true the whole time so the gear eases back to open (pos 5).
+  const rawP = dock ? dock.progress : p;
+  const finFade = inFin ? (1 - smoothstep(clamp01((rawP - 0.92) / 0.04))) : 0;
+  const ft = (p - FIN_START) / FIN_SPAN;            // continuous finale time (keeps running past 1)
+
+  // gears: drivetrain act sweeps the position; the finale lets the "app" command it
+  // (easing back to open as it docks); everywhere else rest at open (pos 5 = base).
+  if (drivetrain){
+    curPos = (c.act === 'drive') ? posAt((p - DRIVE_R[0]) / (DRIVE_R[1] - DRIVE_R[0]))
+           : inFin                ? lerp(5, finalePos(Math.max(0, ft)), finFade)
+           :                        5;
+    const ang = (curPos - 5) * STEP_TURNS * Math.PI * 2;
+    spinGear(drivetrain.drive,  ang);
+    spinGear(drivetrain.enc,   -ang);     // 1:1, opposite
+  }
+
+  // full-stack finale actors (phone glide, app↔server↔hub flow, BLE arc, live command)
+  if (inFin && finFade > 0.002) updateFinale(Math.max(0, ft), finFade); else hideFinale();
+}
+
+// ---------- dimension call-outs (form-factor beats) ----------
+// One leader+pill per axis (W red / H green / D blue), projected from boxes.all so
+// they track the model as it pans. Guadaloop-style.
+function dimSeg(A, B, cls, label, off){
+  const dx = B.x-A.x, dy = B.y-A.y, L = Math.hypot(dx,dy);
+  if (L < 24) return '';                                   // edge-on in this view → skip
+  let nx = -dy/L, ny = dx/L;                               // screen-space perpendicular
+  if ((( A.x+B.x)/2 - innerWidth/2)*nx + ((A.y+B.y)/2 - innerHeight/2)*ny < 0){ nx=-nx; ny=-ny; } // point outward
+  const ax=A.x+nx*off, ay=A.y+ny*off, bx=B.x+nx*off, by=B.y+ny*off, mx=(ax+bx)/2, my=(ay+by)/2, w=label.length*7+16;
+  const f = v => v.toFixed(0);
+  return `<line class="dx" x1="${f(A.x)}" y1="${f(A.y)}" x2="${f(ax)}" y2="${f(ay)}"/>`
+    + `<line class="dx" x1="${f(B.x)}" y1="${f(B.y)}" x2="${f(bx)}" y2="${f(by)}"/>`
+    + `<line class="dl" x1="${f(ax)}" y1="${f(ay)}" x2="${f(bx)}" y2="${f(by)}"/>`
+    + `<rect class="pill" x="${f(mx-w/2)}" y="${f(my-11)}" width="${f(w)}" height="18" rx="5"/>`
+    + `<text class="dt ${cls}" x="${f(mx)}" y="${f(my+3)}" style="font-size:11px;text-anchor:middle">${label}</text>`;
+}
+function drawSizeDims(){
+  if (!boxes.all) return;
+  const b = boxes.all, mn = b.min, mx = b.max, P = (x,y,z) => projectPoint(camera, new THREE.Vector3(x,y,z));
+  const sz = new THREE.Vector3().subVectors(mx, mn);
+  const mm = v => Math.round(v*1000);
+  let s = `<svg viewBox="0 0 ${innerWidth} ${innerHeight}">`;
+  s += dimSeg(P(mn.x,mn.y,mx.z), P(mx.x,mn.y,mx.z), 'ax-x', mm(sz.x)+' mm', 28);   // width  (X)
+  s += dimSeg(P(mn.x,mn.y,mx.z), P(mn.x,mx.y,mx.z), 'ax-y', mm(sz.y)+' mm', 28);   // height (Y)
+  s += dimSeg(P(mx.x,mn.y,mx.z), P(mx.x,mn.y,mn.z), 'ax-z', mm(sz.z)+' mm', 22);   // depth  (Z)
+  dimsEl.innerHTML = s + '</svg>';
 }
 
 // ---------- position readout overlay (tilting slats + 0–10 model) ----------
 function drawDims(kind){
+  if (kind === 'size'){ drawSizeDims(); return; }
   if (kind !== 'drive') return;
   const W = innerWidth, H = innerHeight;
   const n = Math.round(curPos);
@@ -503,11 +573,201 @@ function drawDims(kind){
     <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="4" fill="url(#sky)"/>
     ${slats}
     <!-- numeric readout -->
-    <text x="${gx-12}" y="${gy+gh+52}" fill="#fff" style="font:800 38px 'Helvetica Neue',Arial;letter-spacing:-.02em">${n}<tspan fill="#ffffff66" style="font:800 20px 'Helvetica Neue',Arial"> / 10</tspan></text>
-    <text x="${gx-12}" y="${gy+gh+74}" fill="#ff6a00" style="font:700 13px 'Helvetica Neue',Arial;letter-spacing:.16em">POSITION · ${state}</text>
-    <text x="${gx-12}" y="${gy-26}" fill="#ffffff8c" style="font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.04em">ENCODER · ${ticks} ticks · ${turns} turns</text>
+    <text x="${gx-12}" y="${gy+gh+52}" fill="#fff" style="font:800 38px 'Helvetica Neue',Arial;letter-spacing:-.02em;text-anchor:start;dominant-baseline:auto">${n}<tspan fill="#ffffff66" style="font:800 20px 'Helvetica Neue',Arial"> / 10</tspan></text>
+    <text x="${gx-12}" y="${gy+gh+74}" fill="#ff6a00" style="font:700 13px 'Helvetica Neue',Arial;letter-spacing:.16em;text-anchor:start;dominant-baseline:auto">POSITION · ${state}</text>
+    <text x="${gx-12}" y="${gy-26}" fill="#ffffff8c" style="font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.04em;text-anchor:start;dominant-baseline:auto">ENCODER · ${ticks} ticks · ${turns} turns</text>
   </svg>`;
   dimsEl.innerHTML = svg;
+}
+
+// ---------- full-stack finale: app ↔ server ↔ hub, BLE arc, live command ----------
+// The device is the HUB; a phone (the app) glides in, the Express server sits between
+// them, command dots flow app→server→hub (the server-as-relay), an orange BLE arc links
+// the phone straight to the hub (setup only), and a live "set position N" command turns
+// the hub's external hook to that position — reusing the drivetrain gears.
+let finale = null;
+const finLabelEl = document.createElement('div');
+finLabelEl.id = 'finlabels';
+finLabelEl.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0';
+document.body.appendChild(finLabelEl);
+const FIN_TARGETS = [7, 2, 9, 5];
+const FIN_PERIOD = 0.24;     // fraction of the finale localT per command
+const FIN_START = 0.86, FIN_SPAN = 0.10;   // finale beat's global scroll range (drives a continuous finale time)
+
+function buildFinale(){
+  const grp = new THREE.Group(); grp.visible = false; scene.add(grp);
+  const C = boxes.all.getCenter(new THREE.Vector3());
+  const phoneHome = C.clone().add(new THREE.Vector3(-0.54*S, -0.06*S, 0.34*S));
+  const serverPos = C.clone().add(new THREE.Vector3(-0.26*S,  0.36*S, -0.04*S));
+  const hubPort   = C.clone().add(new THREE.Vector3( 0.04*S,  0.16*S,  0.16*S));
+  // phone (the app) — transparent so it can fade with the dock
+  const phone = new THREE.Group();
+  const pw = 0.17*S, ph = 0.34*S, pd = 0.02*S;
+  const phoneBody = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, pd),
+    new THREE.MeshStandardMaterial({ color:0x0a0a0c, metalness:0.6, roughness:0.4, transparent:true }));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(pw*0.84, ph*0.84),
+    new THREE.MeshStandardMaterial({ color:0x07130d, emissive:0xff6a00, emissiveIntensity:0.4, roughness:0.3, transparent:true }));
+  screen.position.z = pd*0.55; phone.add(phoneBody, screen);
+  phone.position.copy(phoneHome); grp.add(phone);
+  // server node
+  const server = new THREE.Mesh(new THREE.BoxGeometry(0.22*S, 0.13*S, 0.06*S),
+    new THREE.MeshStandardMaterial({ color:0x14161d, metalness:0.3, roughness:0.5, emissive:0xff6a00, emissiveIntensity:0.14, transparent:true }));
+  server.position.copy(serverPos); grp.add(server);
+  // relay flow segments phone→server→hub
+  const mkSeg = (a,b) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a,b]),
+    new THREE.LineBasicMaterial({ color:0xff6a00, transparent:true, opacity:0 })); grp.add(l); return { a:a.clone(), b:b.clone(), line:l }; };
+  const segs = [ mkSeg(phoneHome.clone().add(new THREE.Vector3(pw*0.5,0,0)), serverPos), mkSeg(serverPos, hubPort) ];
+  const dots = [];
+  for (let k=0;k<5;k++){ const d = new THREE.Mesh(new THREE.SphereGeometry(0.013*S, 12, 12),
+    new THREE.MeshBasicMaterial({ color:0xffa24a, transparent:true })); d.visible=false; grp.add(d); dots.push(d); }
+  // BLE provisioning arc (phone → hub direct, dashed)
+  const mid = phoneHome.clone().lerp(hubPort, 0.5).add(new THREE.Vector3(0, 0.5*S, 0.12*S));
+  const curve = new THREE.QuadraticBezierCurve3(phoneHome.clone(), mid, hubPort.clone());
+  const ble = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(50)),
+    new THREE.LineDashedMaterial({ color:0xff6a00, transparent:true, opacity:0, dashSize:0.028*S, gapSize:0.02*S }));
+  ble.computeLineDistances(); grp.add(ble);
+  finale = { grp, phone, phoneBody, screen, server, phoneHome, serverPos, hubPort, segs, dots, ble };
+  boxes.finale = boxes.all.clone().expandByPoint(phoneHome).expandByPoint(serverPos).expandByPoint(hubPort);
+}
+
+// position the hub is commanded to, cycling through FIN_TARGETS over the finale
+function finalePos(t){
+  const idx  = Math.floor(t / FIN_PERIOD) % FIN_TARGETS.length;
+  const prev = (idx - 1 + FIN_TARGETS.length) % FIN_TARGETS.length;
+  const local = (t % FIN_PERIOD) / FIN_PERIOD;
+  return lerp(FIN_TARGETS[prev], FIN_TARGETS[idx], smoothstep(clamp01(local/0.45)));
+}
+
+function updateFinale(t, fade){
+  if (!finale) return;
+  fade = fade == null ? 1 : clamp01(fade);
+  finale.grp.visible = true;
+  const inT = smoothstep(clamp01(t/0.16)) * fade;     // fade-in at the start AND fade-out with the dock
+  // phone glides in from the left
+  const far = finale.phoneHome.clone().add(new THREE.Vector3(-0.45*S, 0, 0));
+  finale.phone.position.lerpVectors(far, finale.phoneHome, smoothstep(clamp01(t/0.28)));
+  finale.screen.material.emissiveIntensity = (0.3 + 0.25*Math.abs(Math.sin(t*16))) * fade;
+  finale.phoneBody.material.opacity = inT; finale.screen.material.opacity = inT; finale.server.material.opacity = inT;
+  for (const s of finale.segs) s.line.material.opacity = 0.5*inT;
+  // command dots flow phone→server→hub (looping)
+  const path = [finale.segs[0].a, finale.segs[0].b, finale.segs[1].b];
+  finale.dots.forEach((d,k) => {
+    const ph = (t*1.5 + k/finale.dots.length) % 1;
+    const sg = ph < 0.5 ? 0 : 1, lo = ph < 0.5 ? ph/0.5 : (ph-0.5)/0.5;
+    d.position.lerpVectors(path[sg], path[sg+1], lo);
+    d.visible = inT > 0.05; d.material.opacity = inT * (0.3 + 0.7*Math.sin(ph*Math.PI));
+  });
+  finale.ble.material.opacity = 0.6*inT*(0.5 + 0.5*Math.sin(t*5));
+  // node + command labels (own overlay div — not subject to the storyboard's #dims fade)
+  const A = projectPoint(camera, finale.phoneHome), Sv = projectPoint(camera, finale.serverPos), Hb = projectPoint(camera, finale.hubPort);
+  const tgt = Math.round(finalePos(t));
+  const local = (t % FIN_PERIOD) / FIN_PERIOD;
+  const pulse = 1 - smoothstep(clamp01(local / 0.32));      // glow when a fresh command lands
+  // legible chip: dark blurred pill + bold white name + mono sub-label
+  const chip = (x,y,txt,sub) => `<div style="position:absolute;left:${x.toFixed(0)}px;top:${y.toFixed(0)}px;transform:translate(-50%,-50%)">`
+    + `<div style="display:inline-block;background:rgba(8,10,14,.74);border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:5px 11px;text-align:center;-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);box-shadow:0 4px 16px rgba(0,0,0,.4)">`
+    + `<div style="font:800 14px/1 'Helvetica Neue',Arial;letter-spacing:.1em;color:#fff">${txt}</div>`
+    + (sub ? `<div style="font:600 10px ui-monospace,Menlo,monospace;color:#ff9a52;margin-top:3px;letter-spacing:.02em">${sub}</div>` : '') + `</div></div>`;
+  // big stylish command badge, lower-left, below the app
+  const cmd = `<div style="position:fixed;left:52px;bottom:118px;font-family:'Helvetica Neue',Arial,sans-serif;transform:scale(${(1 + 0.05*pulse).toFixed(3)});transform-origin:left bottom">`
+    + `<div style="font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.26em;color:#ff6a00">SET&nbsp;POSITION</div>`
+    + `<div style="font:800 64px/0.86 'Helvetica Neue',Arial;letter-spacing:-.03em;color:#fff;margin-top:6px;text-shadow:0 0 ${(18*pulse).toFixed(0)}px rgba(255,106,0,${(0.7*pulse).toFixed(2)})">${tgt}<span style="font-size:26px;color:#ffffff59;letter-spacing:0"> / 10</span></div>`
+    + `<div style="font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.08em;color:#ffffff8c;margin-top:8px">app&nbsp;→&nbsp;server&nbsp;→&nbsp;hub</div></div>`;
+  finLabelEl.innerHTML =
+    chip(A.x, A.y - 16, 'APP', 'blinds_flutter') +
+    chip(Sv.x, Sv.y - 6, 'SERVER', 'blinds_express') +
+    chip(Hb.x + 22, Hb.y - 30, 'HUB', 'Blinds_XIAO') + cmd;
+  finLabelEl.style.opacity = inT.toFixed(2);
+}
+function hideFinale(){ if (finale) finale.grp.visible = false; finLabelEl.style.opacity = '0'; }
+
+// ---------- grouping editor (press G) ----------
+// plswork.glb's parts are anonymous, so each part's vis-group is assigned here by hand
+// and saved to groups.json. Orbit to inspect; pick an active group (a swatch or number
+// key 0–9), then click parts to paint them into it; press E (or the button) to export.
+const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+let activeGroup = 'drive';
+const editorEl = document.getElementById('editor');
+const legendEl = document.getElementById('legend');
+const pickedEl = document.getElementById('picked');
+
+function paintByGroup(m, g){
+  const mats = Array.isArray(m.material) ? m.material : [m.material];
+  mats.forEach(mt => { if (mt && mt.color) mt.color.setHex(GROUP_COLORS[g] ?? GROUP_COLORS.other); });
+}
+function restoreColors(m){
+  const mats = Array.isArray(m.material) ? m.material : [m.material];
+  mats.forEach((mt,k) => { if (mt && mt.color && m.userData.baseColors && m.userData.baseColors[k]) mt.color.copy(m.userData.baseColors[k]); });
+}
+function paintAll(on){ for (const m of meshes) on ? paintByGroup(m, m.userData.vis) : restoreColors(m); }
+
+function renderLegend(){
+  legendEl.innerHTML = '<h3 style="margin:0 0 6px;font-size:13px;letter-spacing:.04em">PART GROUPS</h3>'
+    + '<div class="muted" style="font-size:11px;margin-bottom:8px">Orbit to look around. Pick a group, then click parts to assign. <b>E</b> exports · <b>G</b> exits.</div>';
+  const wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px';
+  VG.forEach((g,i) => {
+    const hex = '#' + (GROUP_COLORS[g] ?? GROUP_COLORS.other).toString(16).padStart(6,'0');
+    const b = document.createElement('button');
+    b.textContent = (i<10 ? i+'·' : '') + g;
+    b.style.cssText = `font:600 11px ui-monospace,monospace;padding:4px 7px;border-radius:6px;cursor:pointer;`
+      + `border:1px solid ${g===activeGroup?'#fff':'#ffffff30'};background:${hex}22;color:${hex}`;
+    b.onclick = () => { activeGroup = g; renderLegend(); };
+    wrap.appendChild(b);
+  });
+  legendEl.appendChild(wrap);
+  const exp = document.createElement('button');
+  exp.textContent = 'Export groups.json';
+  exp.style.cssText = 'margin-top:10px;font:600 12px system-ui;padding:6px 10px;border-radius:6px;cursor:pointer;background:#ff6a00;border:0;color:#fff';
+  exp.onclick = exportGroups; legendEl.appendChild(exp);
+}
+
+function setupGroupEditor(){
+  editor = { on:false };
+  renderLegend();
+  addEventListener('keydown', (ev) => {
+    const k = ev.key.toLowerCase();
+    if (k === 'g'){ editor.on ? exitEdit() : enterEdit(); return; }
+    if (!editor.on) return;
+    if (k === 'e'){ exportGroups(); return; }
+    const n = parseInt(ev.key, 10);
+    if (!isNaN(n) && n >= 0 && n < 10){ activeGroup = VG[n]; renderLegend(); }
+  });
+  let down = null;
+  canvas.addEventListener('pointerdown', e => { if (editor.on) down = [e.clientX, e.clientY]; });
+  canvas.addEventListener('pointerup', e => {
+    if (!editor.on || !down) return;
+    const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1]); down = null;
+    if (moved > 5) return;                       // it was an orbit drag, not a pick
+    const r = canvas.getBoundingClientRect();
+    pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(meshes, false)[0]; if (!hit) return;
+    const m = hit.object; GROUPS[m.name] = activeGroup; m.userData.vis = activeGroup;
+    paintByGroup(m, activeGroup);
+    pickedEl.textContent = `${m.name} → ${activeGroup}`;
+  });
+  document.getElementById('dumpClose')?.addEventListener('click', () => document.getElementById('dump').style.display = 'none');
+}
+const OVERLAY_IDS = ['title','panel','blurb','dims','scrollhint','hud-progress','dockhint'];
+function enterEdit(){
+  editor.on = true; document.body.classList.add('editing');
+  controls.enabled = true; controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));
+  editorEl.style.display = 'block'; paintAll(true);
+  for (const id of OVERLAY_IDS){ const el = document.getElementById(id); if (el) el.style.opacity = '0'; }
+}
+function exitEdit(){
+  editor.on = false; document.body.classList.remove('editing');
+  editorEl.style.display = 'none'; paintAll(false);
+  for (const id of OVERLAY_IDS){ const el = document.getElementById(id); if (el) el.style.opacity = ''; }
+  story.resolve(dock ? dock.shownProgress : 0);
+}
+function exportGroups(){
+  const map = {}; for (const m of meshes) map[m.name] = m.userData.vis;
+  const txt = JSON.stringify({ groups: map }, null, 2);
+  navigator.clipboard?.writeText(txt).catch(()=>{});
+  const d = document.getElementById('dump'), ta = document.getElementById('dumpText');
+  if (ta) ta.value = txt; if (d) d.style.display = 'block';
 }
 
 // ---------- loop ----------

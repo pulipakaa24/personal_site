@@ -18,7 +18,7 @@
 > only have time for one doc update, update the Changelog + Roadmap. A stale context doc is worse
 > than none — it misleads the next agent.
 >
-> Last updated: **2026-06-10**.
+> Last updated: **2026-06-11**.
 
 ---
 
@@ -154,7 +154,11 @@ whole dock-to-case-study shell; you no longer hand-roll `applyDock`/scroll-mappi
   just calls `dock.update()` while the storyboard is active; read `dock.dockK`/`dock.shownProgress` for any
   viewer-side logic (drag guards, editor re-resolve). Relies on the standard ids (`#c`, `#spacer`,
   `#title/#panel/#blurb/#dims`, `#scrollhint/#hint/#hud-progress`, optional `#dockhint`). The docked-card
-  CSS (`#c.docked`, `#dockhint`) lives in `viewer.css`. Guadaloop opts out (no dock — never creates one).
+  CSS (`#c.docked`, `#dockhint`) lives in `viewer.css`. **Every viewer now docks — Guadaloop too** (it docks
+  into the **LevSim** case study; see §8). The constructor **initialises `dockK`/`progress` from the current
+  scroll** (`this._onScroll(); this.shownProgress = this.progress;`) so a **reload while scrolled into the case
+  study docks immediately** instead of rendering the full-screen storyboard "active" behind `#case` until the
+  first scroll input (a long-standing latent bug — any scroll input *was* necessary & sufficient to settle it).
   It also owns the **docked-window controls** (built in JS by `_buildDockUI()`, no per-viewer HTML, shown only
   when `dockK ≥ 0.985`): `#dockwin` (transparent click-catcher over the card → `replay()` smooth-scrolls back
   up to the last storyboard beat full-screen), `#dockmin` ("›" minimise → `collapse()` slides the card off the
@@ -415,7 +419,24 @@ railslider, railholder, railtrack, chassis, other`) tagged by `semanticByName()`
 (unnamed instances inherit a named sibling's tag) so sub-parts fade independently. Rails finale = the
 **sled** (chassis + yoke + sensors + coils + lower slider) travels world +Y on a `trap()` trapezoidal
 profile while bars/track/clamps stay fixed (movers precompute worldBase + parentInv for exact world-space
-translation).
+translation). The last finale chapter is split into `[0.91,0.97]` movement + a `[0.97,1.00]` **settle**
+(box `all`, iso, `fit:2.0`, panel `none`, no motion) so the docked-card framing (also `fit:2.0`) hands off
+cleanly.
+
+### Dock-to-LevSim case study (added 2026-06-11)
+Originally a no-dock viewer; it now docks like the others (RescueVision §7) into the **LevSim** case study —
+the sim environment built to control this rig (source `Guadaloop/Lev-Sim.md` + `System.md` dataflow). Uses
+the shared **`DockController`** (created in `start()` with `getBox:()=>boxes.all, onStory:(p)=>story.resolve(p)`);
+the manual `scroll`→`progress` handler + `tick()` smoothing were removed (DockController owns them). Added:
+`#spacer { height:1500vh }` (was `body`), `#dockhint`, the `assets/project.css` link, and an `<article id="case">`
+using the shared identity (`.award`/`.lede`/`.facts`/`.block`/`.dives`/`footer`). The system-overview asset is a
+**redrawn SVG architecture diagram** (BlindMaster-style classes) of the LevSim dataflow: offline strip *Ansys FEA
+→ force/torque LUT → polynomial `Maglev_Model.pkl`*, then a runtime hub-and-spoke around **`Lev_pod_env.py`**
+(Gymnasium env, 240 Hz) wired to MagLev Predictor, PyBullet, Controllers (PID/LQR/RL), and `maglev_coil.py`.
+The grouping editor still works: `exitEdit` now resolves at `dock.shownProgress`, and `enterEdit` **restores a
+full-screen canvas** (clears the inline dock sizing + `renderer.setSize`) so pressing **G** while docked opens
+the editor full-screen. `viewer.css` hides `#case`/`#dockhint`/`#dockwin`/`#docktab` under `body.editing` so the
+case study can't paint over the editor canvas (z5 > z1).
 
 ### Lighting recipe (CAD-render look) — hard-won, reuse for metal-heavy models
 Target look: the reference render `Guadaloop/TestRig Current/UsefulCrop.png` (glossy studio CAD —
@@ -509,6 +530,95 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-11** — **Guadaloop viewer tied into the LevSim case study (dock-to-case-study) + a long-standing
+  DockController load bug fixed.** The guadaloop rig viewer was the last no-dock viewer; it now docks like the
+  others into the **LevSim** sim-environment write-up (source `Guadaloop/Lev-Sim.md` + `System.md` dataflow).
+  Changes to `viewers/guadaloop/index.html`: linked `assets/project.css`; moved the `1500vh` scroll height off
+  `body` onto a new `#spacer`; added `#dockhint` + an `<article id="case">` (shared `.award/.lede/.facts/.block/
+  .dives/footer` identity) with a **redrawn SVG architecture diagram** of the LevSim dataflow (offline *Ansys FEA
+  → force/torque LUT → polynomial `Maglev_Model.pkl`*; runtime hub-and-spoke around **`Lev_pod_env.py`** @ 240 Hz
+  ⇄ PyBullet, MagLev Predictor, Controllers PID/LQR/RL, `maglev_coil.py`); created a `DockController` in `start()`
+  and replaced the hand-rolled `scroll`→`progress` handler + `tick()` smoothing with `dock.update()`; split the
+  finale into movement `[0.91,0.97]` + a `fit:2.0` **settle** `[0.97,1.00]` to match the docked-card framing. The
+  grouping editor (G) still works — `exitEdit` resolves at `dock.shownProgress`, and `enterEdit` restores a
+  full-screen canvas so it opens correctly even when pressed while docked. Nav label/title now say "Test Rig +
+  LevSim"; the landing card already read "…Test Rig + Sim Env". **Root-cause fix in the shared `DockController`
+  (helps ALL docking viewers):** the constructor never initialised `dockK`/`progress` from the *current* scroll —
+  only the scroll listener set them — so a **reload while scrolled into the case study** left `dockK=0` and rendered
+  the full-screen storyboard "active" behind `#case` until any scroll input nudged it (the user flagged: "any scroll
+  input is necessary and sufficient to get the rendering to figure out the model shouldn't be active"). Now
+  `this._onScroll(); this.shownProgress = this.progress;` runs in the constructor, so a scrolled load docks
+  immediately (verified deterministically by scrolling on DOMContentLoaded *before* the listener exists). Also
+  `viewer.css` now hides `#case/#dockhint/#dockwin/#docktab` under `body.editing` (the editor canvas is z1, `#case`
+  is z5 — it was painting over the full-screen editor). Verified headless: storyboard intact, clean dock hand-off,
+  diagram legible, editor full-screen with group colours, no console errors; the other 3 viewers still load clean
+  and aren't docked at top. *(Lesson: don't conflate the editor's z-index occlusion with the dock-init-on-load bug —
+  they're separate; the user caught the conflation.)*
+- **2026-06-11** — **BlindMaster finale fade fix (second pass — correct fix).** Root cause chain: `DockController.update()` passes `shownProgress` (= `p` in `onResolve`) rather than raw `progress`; `shownProgress` is exponentially smoothed with factor 0.12, so it significantly LAGS raw scroll. dockK=0 (canvas starts shrinking) maps to rawP≈0.961. By that point, `shownProgress` can still be 0.96 or less, keeping `finFade` near 1; the canvas then shrinks with the labels still visible. First fix attempt used `dkFade = 1 - smoothstep(dK/0.5)` (fade over dockK 0→0.5) but at dockK=0.02 (first visible shrink) dkFade≈0.995 — still essentially 1, so the fade only became visible well INTO the shrink. **Correct fix**: use `dock.progress` (un-smoothed rawP) directly — `finFade = 1 - smoothstep(clamp01((rawP - 0.92) / 0.04))`. Fade runs rawP 0.92→0.96; since dockK=0 is at rawP≈0.961, finFade is 0 BEFORE the canvas starts shrinking for any scroll speed. For a typical scroller rawP≈shownP so the fade aligns with the panel/"END TO END" text fade (localT≈0.72 of finale beat, p≈0.932). No shared code changes needed.
+- **2026-06-11** — **BlindMaster storyboard COMPLETE — remaining beats built (dims / plate lift / finale).** (1)
+  **Dimension call-outs** (`drawDims('size')` + `dimSeg`): one leader+pill per axis (W red / H green / D blue,
+  `.ax-x/.ax-y/.ax-z`), projected from `boxes.all` so they track the model as it pans; skips an axis if its
+  projected edge is <24px (edge-on). (2) **Mounting plate = linear lift** (the user rejected a hinge rotation):
+  `buildPlateLift`/`liftPlate(dy)` translate the `plate` movers along world +Y on `PLATE_LIFT·S·sin(π·localT)`
+  (up then neatly back down; 0 at the beat edges). (3) **Full-stack finale** (`buildFinale`/`updateFinale`/
+  `finalePos`/`hideFinale`): the device is the HUB; a transparent **phone glides in**, an Express **server** node
+  sits between, **command dots flow app→server→hub** (server-as-relay), a dashed orange **BLE arc** links phone→hub,
+  and a live **`set position N`** cycles `FIN_TARGETS=[7,2,9,5]` — turning the hub's external hook via the drivetrain
+  gears. Framed on a computed `boxes.finale` (device+phone+server), `fit 1.45`. Labels are a **separate `#finlabels`
+  overlay div** (NOT `#dims`, so the storyboard's dims-fade doesn't touch it): legible dark-pill chips +
+  a big lower-left **SET POSITION** badge (orange glow pulse per fresh command). (4) **Finale fade (bidirectional):**
+  the actors+labels are driven from `FIN_START 0.86` through the settle + dock and fade by `1 − smoothstep(dockK/0.8)`
+  — **/0.8 because the DockController stops calling `onStory` at `dockK ≥ DOCK_SETTLE(0.8)`** (rotisserie hand-off),
+  so they must reach 0 by then or they'd freeze in the docked window. Finale meshes made `transparent` so they fade;
+  the gear `lerp(5, finalePos(ft), finFade)` eases the hook back to open as it docks. Verified: no console errors
+  across the finale+dock range. *(The user fixed the drivetrain readout clipping themselves — the case-study SVG's
+  global `svg text{text-anchor:middle}` was leaking onto `#dims`; forced `text-anchor:start` on the readout text.)*
+- **2026-06-10** — **BlindMaster: corrected GLB (XIAO fixed at source) + name-rules restored + grouping editor.**
+  After the XIAO-placement thrash, the user fixed it in CAD and re-exported. Two iterations: `plswork.glb`
+  (XIAO un-exploded BUT merged into 28 anonymous "Part_NN" meshes — name rules dead, and the upper shell + mounting
+  plate + hook were one merged part, so the plate couldn't be separated) → then **`pls2'.glb`** (113 meshes, **original
+  descriptive CAD names back** — `CR Servo`, `hook with gear`, `Encoder gear`, `Encoder EC12E24204A2`, `BlindsBottomHook`,
+  `BoxTop`/`BoxBottom` **separate**, `xiaoPCB placeholder`, etc. — and the XIAO **in place**, depth shrank 63→**40 mm**).
+  Copied `pls2'.glb` → **`servobox.glb`** (canonical; the viewer loads that). **Restored name-based classification**
+  as `ruleClassify(o)` (the original compacted-name regex rules) and made `classify = GROUPS[name] (override) →
+  ruleClassify → 'other'` — the **Guadaloop rule+override pattern**. **Built a grouping editor** (press **G**) as the
+  override layer for any straggler: orbit, pick an active group (swatch or number key 0–9), click parts to paint them,
+  **E** exports `groups.json` (`{groups:{partName:group}}`); replaced the old AppearanceEditor on G (the old
+  `appearance.json` keyed by the dead mesh names is now stale/unused — re-dress later if wanted; the GLB ships its own
+  per-part materials). Removed `placeXiao` (XIAO no longer exploded) + the `#soloxiao` debug. Updated the form-factor
+  copy to 40 mm and the drivetrain copy to "half a gear turn". **Verified** on the corrected GLB: `#dbg` shows correct
+  groups (plate now separate from box), the drivetrain beat animates (gears spin, POSITION 2/10 · 26 ticks · 1.1 turns,
+  bottom hook static), XIAO sits in the box, no console errors. **Lesson:** when the model's part granularity/topology
+  is wrong, fixing it at the CAD source beats fighting it in code — and don't make destructive edits (dropping/hiding
+  parts) the user didn't ask for. *(Stale files in the folder: `plswork.glb`, `pls2'.glb`, `appearance.json` — safe to
+  delete; the inspector `_inspect.html` gained `?glb=/?only=/?hide=/?tint=/?rainbow=/?reassemble=` flags.)*
+- **2026-06-10** — **BlindMaster XIAO REASSEMBLED (not dropped) — the correct fix.** The user (rightly) pushed
+  back: "replace the XIAO" meant *reassemble it from its constituent parts*, NOT delete it — and dropping it was a
+  bad, unrequested edit. Restored the module and built **`placeXiao(model)`** to reassemble the **exploded** XIAO:
+  inspection (via the upgraded `_inspect.html` `?only=/?tint=/?frame=/?reassemble=` flags + `/private/tmp/bm_iso2.cjs,
+  bm_reasm.cjs, bm_combo.cjs`) showed the XIAO's **PCB + silver RF shield + U.FL** floated out to the back (worldZ ≈
+  −0.030) while its **USB-C body + sockets stayed on the carrier PCB** — and the board's normal is **perpendicular**
+  to the carrier (board ⟂ Z, carrier ⟂ X). So the floating cluster (xiao meshes with worldZ < −0.012) is rotated
+  **−90° about Y** (board normal Z → X, so it lies FLUSH on the carrier with the silver shield + label facing the
+  camera) and translated so its centroid lands on the carrier centre (+X, the camera side). Implemented as a rigid
+  world transform (`local = parentInv · W · base`, decomposed) applied at load before framing; `boxes.elecTop` =
+  xiao ∪ pcb ∪ servo again. **Live tuner `#xiao=dx,dy,dz,yaw,flip`** (mm · deg-about-Y · 0|1 extra 180° about X) for
+  the user to perfect the exact hole-to-tab seating (the 4 board holes seat on the USB-C's 4 tabs). Verified isolated
+  (shield faces viewport, USB-C protrudes, flush with carrier) AND in the viewer (no floating board in the intro;
+  reassembled module in the elecTop beat). *(Supersedes the two prior "drop the xiao group" entries below.)* Known
+  polish: the translucent orange enclosure makes the elecTop beat murky — consider a lower box opacity for the
+  electronics beats so the XIAO reads.
+- **2026-06-10** — **BlindMaster XIAO-disappeared bugfix (classify ordering).** The user caught that the XIAO
+  *and* its board had vanished entirely — a verification miss from round 2 (I saw green boards in the elecTop
+  render and wrongly assumed the labeled placeholder survived; it was actually top/bottom PCBs). **Root cause:**
+  `classify()` ran the `/seeed|xiao|esp32c6|esp32s3/ → 'xiao'` rule BEFORE the `pcb` rule, and `xiaoPCB_placeholder`
+  contains "xiao" (compacts to `xiaopcbplaceholder1`), so the in-box stand-in was swept into the `xiao` group — and
+  my "drop the `xiao` group" filter deleted it along with the exploded module. **Fix:** added
+  `if (/xiaopcbplaceholder/.test(p)) return 'pcb';` **before** the `xiao` rule (and removed `xiaopcbplaceholder` from
+  the later `pcb` rule). Now `xiao` = only the exploded Seeed module (dropped) and the labeled placeholder stays in
+  `pcb` (kept + framed). Verified: intro has no floating board, elecTop frames the labeled green board. *(Lesson:
+  when a name-substring rule precedes a more specific one, the broad rule wins — order specific→general, and when
+  verifying a deletion, confirm the SURVIVOR by identity, not by colour.)*
 - **2026-06-10** — **BlindMaster round 2: drivetrain retune + XIAO reconstitution + appearance + case-study sync +
   landing wiring** (all per the user's feedback, verified headless). (1) **Drivetrain timing:** `STEP_TURNS`
   1.0→**0.5** (1 step = half a turn), gear rotation now **anchored at pos 5** (`ang = (pos−5)·STEP_TURNS·2π`) so the
@@ -948,17 +1058,28 @@ recreate from this section's description if the model changes again.
 
 ## 18. BlindMaster viewer (`viewers/blindmaster/`) — FOUNDATION BUILT 2026-06-10 (in progress)
 
-**Device:** a full-stack IoT **smart-blinds hub** — `servobox.glb`, **64 meshes / 74 nodes**, ~**90 × 132 × 63 mm**
-(palm-sized; the "smaller than a phone" form-factor beat is real). The CAD is in **GLB Y-up already** (the
-mounting hook points toward **+Y**), so unlike RescueVision/SmartPT it needs **no standup** — just hash-tunable
-`#rx/#ry/#rz` (deg, world axes). Source GLB: `LinkedIn_Compiled/projects/blindmaster/servobox.glb` (copied into the
-viewer dir). Firmware source of truth: `BlindMaster/Blinds_XIAO/` (ESP-IDF).
+**Device:** a full-stack IoT **smart-blinds hub** — `servobox.glb` (the user's CORRECTED export, originally
+`pls2'.glb`, copied to `servobox.glb` as the canonical name), **113 meshes**, ~**90 × 132 × 40 mm** (palm-sized; the
+"smaller than a phone" form-factor beat is real — depth is 40 mm now that the XIAO is in place rather than exploded
+out the back). Keeps the original descriptive CAD names (`CR Servo`, `hook with gear`, `Encoder gear`, `Encoder
+EC12E24204A2`, `BlindsBottomHook`, `BoxTop`/`BoxBottom` separate, `xiaoPCB placeholder`, …). The CAD is **GLB Y-up
+already** (mounting hook → **+Y**), so **no standup** — just hash-tunable `#rx/#ry/#rz` (deg, world axes). Firmware
+source of truth: `BlindMaster/Blinds_XIAO/` (ESP-IDF). *(GLB history: the 1st export had the XIAO exploded; `plswork.glb`
+fixed that but merged everything into 28 anonymous "Part_NN" meshes — abandoned; `pls2'` restored the named, separated
+parts. See the changelog.)*
 
-**vis-groups (`classify()`, compacted name chain):** `servo` (`crservo`), `drive` (`hookwithgear` — the **top**
+**Classification = `GROUPS[name]` (groups.json override) → `ruleClassify(o)` (name rules) → `'other'`** — the
+Guadaloop rule+override pattern. A **grouping editor (press G)** is the override layer (orbit, pick a group via swatch
+or number key 0–9, click parts to paint, **E** exports `groups.json`); `groups.json` ships empty since the name rules
+do everything. *(The old material AppearanceEditor + `appearance.json` were keyed by the dead pre-correction mesh
+names — removed/stale; re-dress materials later if wanted. The GLB ships its own per-part materials.)*
+
+**vis-groups (`ruleClassify`, compacted name chain):** `servo` (`crservo`), `drive` (`hookwithgear` — the **top**
 hook+gear the servo turns), `encgear` (`encodergear`), `enc` (`encoderec12e24204a2` — the **two** EC12 rotary
-encoders), `bottomhook` (`blindsbottomhook` — its own shaft at the base, likely the **manual wand**), `xiao`
-(`seeed|xiao|esp32c6|esp32s3` — modeled **exploded OUT** to the side; should be relocated into the box), `battery`
-(`lipo|batteryholder|phr2forbattery`), `power` (`stepupplaceholder` boost), `pcb` (`toppcb|bottompcbreal|xiaopcbplaceholder`),
+encoders), `bottomhook` (`blindsbottomhook` — its own shaft at the base, the **manual wand**), `xiao`
+(`seeed|xiao|esp32c6|esp32s3` — **in place** in the corrected GLB), `battery`
+(`lipo|batteryholder|phr2forbattery`), `power` (`stepupplaceholder` boost), `pcb` (`xiaopcbplaceholder` MUST precede
+the `/xiao/` rule, plus `toppcb|bottompcbreal`),
 `plate` (`boxtop` — the big flat **mounting plate**, hinged), `box` (`boxbottom` — main enclosure body), `other`
 (pin headers, JST, eBom free-parts blob, button/port placeholders). Composite framing boxes: `boxes.mech`
 (servo+drive+encgear+enc+bottomhook), `boxes.elecTop` (xiao+pcb+servo), `boxes.elecBot` (battery+power).
@@ -987,15 +1108,18 @@ small SoC gauge) → **06** full-stack finale **last** (app↔server↔hub relay
 the case-study SVG; a Socket.IO `set position` command drives the gear) → settle → dock to the shared `project.css`
 case study. Hash: `#dbg` (group-colour check), `#rx/#ry/#rz` (orientation).
 
-**Status (2026-06-10):** load/orient/classify, all 9 beats (framing + panels + translucency), dock + **synced** case
-study (architecture SVG ported from `projects/blindmaster.html`), the drivetrain + 11-position payoff act, the
-appearance pass (`appearance.json` wired), the **XIAO reconstitution** (floating module hidden → labeled placeholder),
-and the **landing-page wiring** (featured card + PROJECTS map → the viewer, 3D badge) all built & verified headless.
-**Gear kinematics (user-confirmed):** 1:1 opposite, **½ turn/step** (`STEP_TURNS`), rotation anchored at pos 5; bottom
-hook is an **independent manual wand** (stays put under app-driven motion). Sweep `POS_KEYS = 5→0→10→5` (~1.5 passes).
-See `buildDrivetrain`/`spinGear`/`posAt`/`drawDims('drive')` + the two changelog entries. **Still to build:** (1)
-`drawDims('size')` dimension call-outs (form-factor beats); (2) the **mounting-plate hinge** animation (beat 02,
-`plate`/BoxTop about its hinge); (3) the **full-stack finale** actors (app↔server↔hub relay + orange BLE provisioning
-arc + a Socket.IO command driving the gear; beat 06, `finale:true`). Confirmed blind type = **venetian tilt** (per the
-0/5/10 model). Throwaway inspector: `viewers/blindmaster/_inspect.html` + `/private/tmp/bm_inspect.cjs, bm_xiao.cjs`
-(delete after build, like the SmartPT inspectors).
+**Status (2026-06-10):** on the corrected GLB — load/orient/classify (name rules + grouping-editor override), all 9
+beats (framing + panels + translucency, plate now **separate** from box so the mounting beat isolates it), dock +
+**synced** case study (architecture SVG ported from `projects/blindmaster.html`), and the drivetrain + 11-position
+payoff act all built & verified headless (no console errors; `#dbg` groups correct; gears spin, POSITION readout,
+bottom hook static, XIAO in place). Landing-page card + PROJECTS map → the viewer (3D badge). **Gear kinematics
+(user-confirmed):** 1:1 opposite, **½ turn/step** (`STEP_TURNS`), rotation anchored at pos 5; bottom hook is an
+**independent manual wand** (stays put under app-driven motion). Sweep `POS_KEYS = 5→0→10→5` (~1.5 passes). See
+`buildDrivetrain`/`spinGear`/`posAt`/`drawDims('drive')`. **Storyboard COMPLETE (2026-06-11):** all beats built —
+form-factor dimension call-outs (`drawDims('size')`/`dimSeg`), mounting-plate **linear lift** (`liftPlate`, not a
+hinge), full-stack **finale** (`buildFinale`/`updateFinale`/`finalePos`; phone+server+relay-dots+BLE-arc+`SET POSITION`
+badge in `#finlabels`), and the **bidirectional finale fade** over `dockK∈[0,0.8]` (must reach 0 by 0.8 — the
+DockController stops resolving the storyboard there). Confirmed blind type = **venetian tilt** (per the 0/5/10 model).
+**Optional remaining:** re-dress materials (the appearance path was removed; GLB ships its own); on-device mobile pass.
+Throwaway inspector `viewers/blindmaster/_inspect.html` (flags `?glb/?only/?hide/?tint/?rainbow/?reassemble`); stale
+model files `plswork.glb`, `pls2'.glb`, `appearance.json` can be deleted.
