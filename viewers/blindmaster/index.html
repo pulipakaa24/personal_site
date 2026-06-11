@@ -214,7 +214,7 @@
 <script type="module">
 import {
   createStudioScene, loadGLB, prepareMeshes, centerModel, setOpacity,
-  frameCamera, makeSlot, makeVis, Storyboard, DockController, pca, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, THREE
+  frameCamera, makeSlot, makeVis, Storyboard, DockController, pca, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, DEV, THREE
 } from '../shared/engine.js';
 
 const canvas = document.getElementById('c');
@@ -609,10 +609,29 @@ function buildFinale(){
     new THREE.MeshStandardMaterial({ color:0x07130d, emissive:0xff6a00, emissiveIntensity:0.4, roughness:0.3, transparent:true }));
   screen.position.z = pd*0.55; phone.add(phoneBody, screen);
   phone.position.copy(phoneHome); grp.add(phone);
-  // server node
-  const server = new THREE.Mesh(new THREE.BoxGeometry(0.22*S, 0.13*S, 0.06*S),
-    new THREE.MeshStandardMaterial({ color:0x14161d, metalness:0.3, roughness:0.5, emissive:0xff6a00, emissiveIntensity:0.14, transparent:true }));
-  server.position.copy(serverPos); grp.add(server);
+  // server node — cloud sprite (canvas texture, always faces camera)
+  // Canvas: overlapping filled arcs clipped to a flat base, with orange shadow glow.
+  // Sprite avoids all the sphere-seam shading artifacts of a 3D mesh approach.
+  const _cv = document.createElement('canvas'); _cv.width = 256; _cv.height = 128;
+  const _cx = _cv.getContext('2d');
+  _cx.save();
+  _cx.beginPath(); _cx.rect(0, 0, 256, 96); _cx.clip();   // flat bottom at y=96
+  _cx.shadowColor = '#ff6a00'; _cx.shadowBlur = 14;
+  _cx.fillStyle = '#1c1e2a';
+  for (const [x,y,r] of [
+    [128, 68, 44], [82, 74, 34], [174, 74, 34],
+    [108, 46, 28], [150, 46, 28],
+    [48,  82, 22], [210, 82, 22],
+  ]) { _cx.beginPath(); _cx.arc(x,y,r,0,Math.PI*2); _cx.fill(); }
+  _cx.shadowBlur = 0; _cx.fillRect(48, 78, 160, 18);   // solid base strip to fill gaps
+  _cx.restore();
+  const serverMat = new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(_cv),
+    transparent: true, depthWrite: false, alphaTest: 0.01
+  });
+  const cloudSprite = new THREE.Sprite(serverMat);
+  cloudSprite.scale.set(0.38*S, 0.19*S, 1);
+  cloudSprite.position.copy(serverPos); grp.add(cloudSprite);
   // relay flow segments phone→server→hub
   const mkSeg = (a,b) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a,b]),
     new THREE.LineBasicMaterial({ color:0xff6a00, transparent:true, opacity:0 })); grp.add(l); return { a:a.clone(), b:b.clone(), line:l }; };
@@ -626,7 +645,7 @@ function buildFinale(){
   const ble = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(50)),
     new THREE.LineDashedMaterial({ color:0xff6a00, transparent:true, opacity:0, dashSize:0.028*S, gapSize:0.02*S }));
   ble.computeLineDistances(); grp.add(ble);
-  finale = { grp, phone, phoneBody, screen, server, phoneHome, serverPos, hubPort, segs, dots, ble };
+  finale = { grp, phone, phoneBody, screen, serverMat, phoneHome, serverPos, hubPort, segs, dots, ble };
   boxes.finale = boxes.all.clone().expandByPoint(phoneHome).expandByPoint(serverPos).expandByPoint(hubPort);
 }
 
@@ -647,7 +666,7 @@ function updateFinale(t, fade){
   const far = finale.phoneHome.clone().add(new THREE.Vector3(-0.45*S, 0, 0));
   finale.phone.position.lerpVectors(far, finale.phoneHome, smoothstep(clamp01(t/0.28)));
   finale.screen.material.emissiveIntensity = (0.3 + 0.25*Math.abs(Math.sin(t*16))) * fade;
-  finale.phoneBody.material.opacity = inT; finale.screen.material.opacity = inT; finale.server.material.opacity = inT;
+  finale.phoneBody.material.opacity = inT; finale.screen.material.opacity = inT; finale.serverMat.opacity = inT;
   for (const s of finale.segs) s.line.material.opacity = 0.5*inT;
   // command dots flow phone→server→hub (looping)
   const path = [finale.segs[0].a, finale.segs[0].b, finale.segs[1].b];
@@ -724,7 +743,8 @@ function renderLegend(){
 function setupGroupEditor(){
   editor = { on:false };
   renderLegend();
-  addEventListener('keydown', (ev) => {
+  // The grouping editor (G) is dev-only chrome (see engine.js DEV).
+  if (DEV) addEventListener('keydown', (ev) => {
     const k = ev.key.toLowerCase();
     if (k === 'g'){ editor.on ? exitEdit() : enterEdit(); return; }
     if (!editor.on) return;

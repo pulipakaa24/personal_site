@@ -20,6 +20,33 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // gesture → the storyboard gets stuck on frame 1). See createStudioScene + DockController.
 export const COARSE = matchMedia('(pointer: coarse)').matches;
 
+// ---------- dev mode ----------
+// Gates the developer-only chrome shared by every viewer: the top-left "x%"
+// progress HUD and the "press G" part-grouping / appearance editor. Casual
+// visitors never see either. Enable per-browser by loading the viewer with
+// `#dev` (or `?dev`) in the URL — it persists via localStorage, so you only
+// type it once. Turn it back off with `#nodev` (or `?dev=0`).
+// When on, <body> gets a `.dev` class (viewer.css reveals the HUD + hint off it).
+export const DEV = (() => {
+  let on = false;
+  try {
+    const q = new URLSearchParams(location.search);
+    const h = new URLSearchParams(location.hash.slice(1));
+    const dq = q.has('dev') ? q.get('dev') : null;            // null | '' | '1' | '0'
+    const wantOn  = h.has('dev')   || dq === '' || dq === '1';
+    const wantOff = h.has('nodev') || dq === '0';
+    if (wantOff)     { localStorage.removeItem('viewerDev'); on = false; }
+    else if (wantOn) { localStorage.setItem('viewerDev', '1'); on = true; }
+    else             { on = localStorage.getItem('viewerDev') === '1'; }
+  } catch (e) { on = false; }
+  if (on) {
+    const mark = () => document.body && document.body.classList.add('dev');
+    if (document.readyState === 'loading') addEventListener('DOMContentLoaded', mark);
+    else mark();
+  }
+  return on;
+})();
+
 // ---------- math ----------
 export const clamp01 = t => Math.max(0, Math.min(1, t));
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -462,11 +489,17 @@ export class DockController {
     win.appendChild(min);
     const tab = document.createElement('button'); tab.id = 'docktab';
     tab.setAttribute('aria-label', 'Show the 3D model'); tab.innerHTML = '<span>‹</span>3D';  // ‹
-    document.body.appendChild(win); document.body.appendChild(tab);
+    // "Skip to case study" — jumps past the 3D walkthrough straight to the dock /
+    // case-study start. Shown during the walkthrough, hidden once the model docks.
+    const skip = document.createElement('button'); skip.id = 'skipcase'; skip.type = 'button';
+    skip.setAttribute('aria-label', 'Skip the 3D walkthrough and jump to the case study');
+    skip.innerHTML = 'Skip to case study <span>↓</span>';
+    document.body.appendChild(win); document.body.appendChild(tab); document.body.appendChild(skip);
     win.addEventListener('click', () => this.replay());
     min.addEventListener('click', (e) => { e.stopPropagation(); this.collapse(); });
     tab.addEventListener('click', () => this.expand());
-    this._win = win; this._tab = tab;
+    skip.addEventListener('click', () => this.skipToCase());
+    this._win = win; this._tab = tab; this._skip = skip;
     this._layoutDockUI();
   }
 
@@ -481,6 +514,17 @@ export class DockController {
   expand(){ this.collapsed = false; }
   // scroll back up to the last storyboard beat, full-screen — re-enters the 3D walkthrough
   replay(){ this.expand(); scrollTo({ top: Math.max(0, this._storyEnd - innerHeight*0.5), behavior: 'smooth' }); }
+
+  // skip the walkthrough: smooth-scroll straight to the case-study start, where the
+  // model has docked into its corner card. Targets the top of #case (dockK reaches 1
+  // there); falls back to the dock-complete scroll position if there's no #case.
+  skipToCase(){
+    this.expand();
+    const el = document.getElementById('case');
+    const top = el ? Math.round(el.getBoundingClientRect().top + scrollY)
+                   : Math.round(this._storyEnd + innerHeight * 0.25);
+    scrollTo({ top, behavior: 'smooth' });
+  }
 
   // lerp the fixed canvas from fullscreen to the top-right card; resize renderer to match
   applyDock(k){
@@ -497,7 +541,7 @@ export class DockController {
     cv.style.pointerEvents = (COARSE || k > 0.5) ? 'none' : 'auto';
     this.renderer.setSize(w, h, false); this.camera.aspect = w/h; this.camera.updateProjectionMatrix();
     const disp = (id, hide) => { const el = document.getElementById(id); if (el) el.style.display = hide ? 'none' : ''; };
-    disp('scrollhint', k>0.03); disp('hint', k>0.03);
+    disp('scrollhint', k>0.03); disp('hint', k>0.03); disp('skipcase', k>0.03);
     const hp = document.getElementById('hud-progress'); if (hp) hp.style.opacity = k>0.4 ? 0 : 0.7;
 
     // collapse-to-edge-tab + click-to-replay: only once the card is essentially fully docked

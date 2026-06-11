@@ -126,6 +126,14 @@ as the template** and swap the GLB + `classify()` + `chapters`. A docking viewer
 whole dock-to-case-study shell; you no longer hand-roll `applyDock`/scroll-mapping/reveal-observer per viewer.
 
 ### `engine.js` (ES module) exports:
+- **`DEV`** — the shared **dev-mode** flag, computed once at module load. Gates the developer-only chrome
+  that every viewer carries: the top-left **`#hud-progress` "x%"** readout and the **press-G** editor
+  (grouping or appearance). Casual visitors see neither. **Enable per-browser with `#dev` (or `?dev`)** in
+  the viewer URL → it **persists via `localStorage['viewerDev']`** so you only type it once; **disable with
+  `#nodev` (or `?dev=0`)**. When on, `engine.js` adds a **`.dev` class to `<body>`** (on DOMContentLoaded);
+  `viewer.css` reveals `#hud-progress`/`#hint` only off `body.dev` (both are `display:none` by default).
+  The G-key listeners are registered only when `DEV` (in `appearance.js` for RescueVision/SmartPT; inline
+  `if (DEV) addEventListener(...)` in guadaloop/blindmaster). One flag → all four viewers.
 - **Math:** `clamp01, lerp, smoothstep, ease (easeInOutCubic), trap, trapUpDown`.
 - **`pca(pts)`** — PCA via Jacobi eigen-decomposition (shared by the coordinate-frame / hinge / tube-axis
   derivations); returns `{center, axes (sorted by extent desc), ext}`. *(Was duplicated inline in both
@@ -165,7 +173,12 @@ whole dock-to-case-study shell; you no longer hand-roll `applyDock`/scroll-mappi
   right edge via `#c.docked.collapsed`), and `#docktab` ("‹ 3D" edge tab → `expand()`). `update()` auto-clears
   `collapsed` when `dockK < DOCK_FULL` (scrolling back toward the 3D). Minimise (corner button) and replay
   (body click) are intentionally separate gestures. `_cardRect()` is the single source for the card's resting
-  rect (shared by `applyDock` + the controls).
+  rect (shared by `applyDock` + the controls). `_buildDockUI()` also builds **`#skipcase` ("Skip to case study
+  ↓")** — a user-facing (NOT dev-gated) glass chip shown during the walkthrough (`applyDock` hides it once
+  `dockK > 0.03`, same trigger as `#scrollhint`/`#hint`); **`skipToCase()`** smooth-scrolls straight to the top
+  of `#case` (where `dockK` reaches 1 → the model is docked in its corner card and the case heading is at the
+  viewport top), falling back to the dock-complete scroll position if a viewer has no `#case`. One method on the
+  shared controller → all four viewers get it for free.
 
 ### The `Storyboard` chapter model
 Each chapter is an object:
@@ -227,8 +240,10 @@ The GLBs ship with few/no good materials, so this lets the user dress them and e
 All shared viewer chrome: hero `#title` with outlined `.ol` word, `#panel` (top-right side title),
 `#blurb` (bottom-right), `#dims` SVG overlay (+ `.ax-x/.ax-y/.ax-z/.pill` coord call-out classes),
 `nav` (with **glass chips** on `.brand`/`.pbtn`), `#loader`, the **docked-window controls**
-(`#dockwin`/`#dockmin`/`#docktab` + `#c.docked.collapsed` slide-off), and the editor shell
-(`#editor/#legend/#picked/#dump`). Phone breakpoint `@media(max-width:640px)` + `@media(pointer:coarse)`.
+(`#dockwin`/`#dockmin`/`#docktab` + `#c.docked.collapsed` slide-off), the **`#skipcase`** "skip to case study"
+glass chip (bottom-center, above `#scrollhint`; `body.editing #skipcase{display:none}`), and the editor shell
+(`#editor/#legend/#picked/#dump`). The **`#hud-progress`/`#hint` are dev-only** (`display:none` by default,
+revealed off `body.dev`). Phone breakpoint `@media(max-width:640px)` + `@media(pointer:coarse)`.
 
 ### GLTFLoader gotcha (bit us hard — remember it)
 **Node names get spaces and dots STRIPPED** by GLTFLoader
@@ -496,6 +511,11 @@ coursework, skills, contact/footer.
 - **Clean up debug handles** before finishing (`window.__rv`, `__editor`, `__debug`) — grep to confirm.
 - **Hash overrides** are the live-tuning mechanism for things awaiting the user's eye (`#rx/#ry/#rz`,
   `#cs1y/#cs1z/#cs2x/#cs2z`). Bake confirmed values as defaults and drop the hash once approved.
+- **Dev mode (`DEV`, engine.js):** the **"x%" HUD + press-G editor are dev-only** and hidden in production.
+  Turn them on per-browser with **`#dev`** (persists via `localStorage`), off with **`#nodev`**. Gated by a
+  single shared flag + a `body.dev` CSS class — don't re-introduce always-on HUD/hint or ungated G handlers
+  in a viewer. (Note: a **hash-only** navigation doesn't reload the page, so the module won't re-read `#dev`
+  — load the URL fresh / reload; this also bit the headless test until it forced a full load.)
 - Respect explicit **pause points** ("pause when you finish this item").
 - **Deploy = Cloudflare Pages** (`aditya.pulipaka.com`, repo `pulipakaa24/personal_site`; a push auto-deploys).
   Cloudflare's default **Browser Cache TTL pins `.css`/`.js` for 4h with no revalidation** → edits don't show
@@ -530,6 +550,49 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-11** — **Shared "Skip to case study" control on every 3D walkthrough.** The user asked for a skip
+  option on all viewers that "scrolls directly to case study start (dock start)". Built once in the shared
+  **`DockController`** so all four viewers inherit it: `_buildDockUI()` now also creates **`#skipcase`** ("Skip
+  to case study ↓"), and **`skipToCase()`** smooth-scrolls straight to the **top of `#case`** — the scroll
+  position where `dockK` reaches 1, i.e. the model has docked into its top-right corner card and the case-study
+  heading is at the viewport top (falls back to the dock-complete scroll position `_storyEnd + innerHeight*0.25`
+  if a viewer lacks `#case`). *(Chose the case-study top over the literal dockK=0 "dock start" because at dockK=0
+  the model is still full-screen and the case study isn't visible yet — landing there wouldn't "skip to the case
+  study"; smooth-scrolling to the case top still fast-forwards the dock animation on the way down.)* Visibility:
+  `applyDock` toggles it with the same `disp('skipcase', k>0.03)` trigger as `#scrollhint`/`#hint`, so it shows
+  throughout the walkthrough and disappears once docking begins (and auto-reappears if you scroll back up / hit
+  replay). Styled in `viewer.css` as a **glass chip** (matching the nav chips: blur + tint + accent ↓) pinned
+  **bottom-center just above `#scrollhint`** — a deliberately non-conflicting spot (the right rail holds
+  `#panel`/`#blurb`, the top corners hold the nav/brand, and center-bottom-over-the-model is already the
+  `#scrollhint` safe zone). `body.editing #skipcase{display:none}` hides it in the editor; a `@media(max-width:640px)`
+  tweak slims it on phones. **User-facing, NOT dev-gated** (unlike the HUD/hint). **Verified headless across all
+  four viewers** (`/private/tmp/skipcheck.cjs` + screenshots): chip present/visible at the top, click lands the
+  scroll **exactly at `#case` top** (model docked, `#c.docked`, case heading at viewport top, chip hidden), no
+  console errors; screenshots confirm clean placement above the scroll hint at the intro AND no collision with
+  the side blurb at a mid beat.
+- **2026-06-11** — **Landing hero CTA relabel** (`index.html`). The user asked to rename the hero's primary
+  CTA from **"View Work →" to "View Projects →"** (the `#work` section is actually the *projects* grid —
+  "02 — Selected Work") and to add a **"Work history"** button next to it. Wired the new button to
+  **`#experience`** (the "03 — Experience" timeline = his actual work history), keeping it a plain `.btn`
+  beside the solid primary. CTA row is now `View Projects → · Work history · Résumé · Get in touch`. Verified
+  headless at 1280px (single clean row) and 390px (wraps to a tidy 2×2) — labels + hrefs confirmed in the DOM.
+- **2026-06-11** — **Shared dev-mode gate — hide the "x%" HUD + the press-G editor in production (all viewers).**
+  The user asked to gate the top-left **`#hud-progress` "x%"** readout and the **press-G** part-grouping /
+  appearance editor behind a dev mode, "ideally a fix that reaches across all viewers" with shared code moved
+  into `viewers/shared/`. Done as **one shared flag** rather than per-viewer toggles: added **`export const DEV`**
+  to `engine.js` (computed once at module load) — `#dev`/`?dev` in the URL turns it on and **persists via
+  `localStorage['viewerDev']`**; `#nodev`/`?dev=0` turns it off; otherwise it reads localStorage. When on, engine
+  adds a **`.dev` class to `<body>`** (on DOMContentLoaded). `viewer.css` now sets `#hud-progress`/`#hint`
+  `display:none` **by default** and reveals them only off **`body.dev`** (so casual visitors see neither). The
+  **G-key listeners are registered only when `DEV`**: `appearance.js` wraps its keydown in `if (DEV)` (covers
+  RescueVision + SmartPT, which use `AppearanceEditor`), and the inline grouping-editor handlers in
+  `guadaloop/index.html` + `blindmaster/index.html` became `if (DEV) addEventListener(...)` (both now also import
+  `DEV`). The editors' click/pointer handlers already early-return on `!editor.on`/`!this.on`, so with G inert they
+  stay dormant. **Verified headless across all four viewers** (`/private/tmp/devcheck.cjs`): production = body not
+  `.dev`, HUD+hint `display:none`, G does nothing; `#dev` = `body.dev`, both shown, G opens the editor; a plain
+  reload **persists** (localStorage); `#nodev` clears it back to hidden — no console errors anywhere. *(Gotcha
+  surfaced: a **hash-only** nav doesn't reload the page, so the module won't re-evaluate `#dev` — the test had to
+  force a full `about:blank`→URL load; same applies in real use: add `#dev` then reload.)*
 - **2026-06-11** — **Guadaloop viewer tied into the LevSim case study (dock-to-case-study) + a long-standing
   DockController load bug fixed.** The guadaloop rig viewer was the last no-dock viewer; it now docks like the
   others into the **LevSim** sim-environment write-up (source `Guadaloop/Lev-Sim.md` + `System.md` dataflow).

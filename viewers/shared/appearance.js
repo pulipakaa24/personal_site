@@ -17,7 +17,7 @@
 // Export always emits the compact range form (see compactAppearance); the reader
 // transparently accepts both. expandTris() normalises either to a flat list.
 // ============================================================================
-import { THREE } from './engine.js';
+import { THREE, DEV } from './engine.js';
 
 export const DEFAULT_PALETTE = [
   { name:'PCB green',     color:'#0d5b1e', metalness:0.0, roughness:0.50 },
@@ -220,7 +220,8 @@ export class AppearanceEditor {
     this.helper = new THREE.BoxHelper(new THREE.Object3D(), 0x19d3ff); this.helper.visible = false; this.scene.add(this.helper);
 
     this._buildUI();
-    addEventListener('keydown', e => { if (e.key.toLowerCase() === this.toggleKey && !/input|textarea/i.test(document.activeElement?.tagName||'')) this.toggle(); });
+    // G (toggleKey) only opens the editor in dev mode (see engine.js DEV).
+    if (DEV) addEventListener('keydown', e => { if (e.key.toLowerCase() === this.toggleKey && !/input|textarea/i.test(document.activeElement?.tagName||'')) this.toggle(); });
     this.renderer.domElement.addEventListener('click', e => this._click(e));
     this.applyAll();
   }
