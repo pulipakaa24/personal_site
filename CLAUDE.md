@@ -172,7 +172,9 @@ Each chapter is an object:
   pan: 0..1,                // horizontal offset (model slides left so panels have room);
                             //   auto-reduced on narrow/portrait viewports — frameCamera scales it by
                             //   min(1, camera.aspect/PAN_FULL_ASPECT) so it never slides off a phone's left edge
-  fit: number,              // zoom multiplier on the framed box (bigger = further out)
+  fit: number,              // zoom multiplier on the framed box (bigger = further out); on narrow/portrait
+                            //   viewports frameCamera adds an extra zoom-out (PORTRAIT_FIT, `#pfit=`) so a
+                            //   wide model fits the horizontal FOV too — landscape/desktop are unchanged
   vis: vis({ALL:1, grp:1}), // per-vis-group target opacity (TRANS≈translucent for the rest)
   panel:{mode:'hero'|'side'|'none', sec, blurb, tag},
   dims:'<kind>'|null,       // which dimension/coord overlay to draw
@@ -206,6 +208,16 @@ The GLBs ship with few/no good materials, so this lets the user dress them and e
 - Sliders for color/metalness/roughness, "+ new appearance", **Export → `appearance.json`**.
 - `applyAppearance(meshes, json)` re-applies a saved map at load. JSON shape:
   `{palette, parts:{key:idx}, faces:[{name/key, app, tris}]}`.
+- **`tris` is run-length encoded** as inclusive `[[start,end], …]` ranges (the older flat `[i,…]` list
+  still loads — `expandTris` normalizes either). **Export compacts losslessly** via `compactAppearance(json, triCountOf)`
+  (2026-06-10): per mesh it (1) flattens overlapping/stale face layers (LATER wins per triangle, matching
+  `paintFacesMulti`) so re-painting a body doesn't pile up dead copies; (2) drops face triangles whose final
+  app **equals the mesh's base `part`** (they render identically, so they fall through to the base);
+  (3) promotes a single app that covers a whole mesh to a `parts` entry (needs `triCountOf`, skipped if null —
+  still correct); (4) merges survivors by app and RLE-encodes. **Why it matters:** the editor only ever *appends*
+  face entries and used to pretty-print the flat lists, so RescueVision's file had ballooned to **854 KB / 58 551
+  lines** (the same body painted 5× over multiple sessions, ~58 k explicit indices). Migrated in place to **1.4 KB /
+  1 line** (8 760 real tris → 18 ranges) with a pixel-identical render — same workflow, smart serialization.
 
 ### `viewer.css`
 All shared viewer chrome: hero `#title` with outlined `.ol` word, `#panel` (top-right side title),
@@ -381,9 +393,11 @@ hand-rolled inline approximation of the project-page look — replaced 2026-06-0
 CSS.)*
 
 ### Appearance
-`appearance.json` currently ships the palette (+ whatever the user has painted — the sensor placeholder
-was painted **red**). Model otherwise uses baked CAD colors with a matte default (roughness ≥ 0.52).
-Dress further via the **G** editor.
+`appearance.json` ships the palette + the painted assignments (the sensor placeholder is **red** (app 10);
+`mesh_2_3#5` is **aluminium** (app 5) over a matte-black base part). Model otherwise uses baked CAD colors
+with a matte default (roughness ≥ 0.52). Dress further via the **G** editor. The file is the **compact
+run-length form** (see §5 `compactAppearance`) — it was a 854 KB / 58 551-line monster of stale duplicate
+per-triangle index lists, migrated 2026-06-10 to 1.4 KB with a verified-identical render.
 
 ---
 
@@ -462,6 +476,13 @@ coursework, skills, contact/footer.
 - **Hash overrides** are the live-tuning mechanism for things awaiting the user's eye (`#rx/#ry/#rz`,
   `#cs1y/#cs1z/#cs2x/#cs2z`). Bake confirmed values as defaults and drop the hash once approved.
 - Respect explicit **pause points** ("pause when you finish this item").
+- **Deploy = Cloudflare Pages** (`aditya.pulipaka.com`, repo `pulipakaa24/personal_site`; a push auto-deploys).
+  Cloudflare's default **Browser Cache TTL pins `.css`/`.js` for 4h with no revalidation** → edits don't show
+  up on reload (the user hit this in Safari). A repo-root **`_headers`** file forces `*.css`/`*.js`/`*.html`
+  to `public, max-age=0, must-revalidate` (revalidate each load; ETag → 304 when unchanged). HTML + `.glb`
+  already revalidate. Verify after deploy: `curl -sI https://aditya.pulipaka.com/assets/project.css` →
+  `max-age=0`. If still `14400`, flip the dashboard Browser Cache TTL to **"Respect Existing Headers."** See
+  §12 (2026-06-10) for the full diagnosis + the deferred `?v=<hash>` cache-bust alternative.
 
 ---
 
@@ -488,6 +509,113 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-10** — **BlindMaster round 2: drivetrain retune + XIAO reconstitution + appearance + case-study sync +
+  landing wiring** (all per the user's feedback, verified headless). (1) **Drivetrain timing:** `STEP_TURNS`
+  1.0→**0.5** (1 step = half a turn), gear rotation now **anchored at pos 5** (`ang = (pos−5)·STEP_TURNS·2π`) so the
+  resting/assembled pose is the model's base orientation (readout turns/ticks halve — pos 4 now reads 2.0 turns / 47
+  ticks). `POS_KEYS` trimmed to `5→0→10→5` (≈1.5 gentle passes, middle 0→10 gets most of the scroll) → ~3× slower
+  gear spin per scroll; both endpoints + rest sit at base ⇒ still no snap. (2) **XIAO reconstitution:** the detailed
+  Seeed module is modeled **exploded** (board + RF shield flew out to the back-right, z≈−0.030). The **`xiaoPCB
+  placeholder`** (in the `pcb` group) already sits correctly inside the box AND carries the **"seeed studio · ESP32C6"
+  silkscreen label**, so it's the right stand-in. Now drop the whole `xiao` vis-group at load (`meshes.filter(...
+  vis!=='xiao')`, `visible=false`) and frame `boxes.elecTop = pcb ∪ servo`. (3) **Appearance:** the user pasted
+  `viewers/blindmaster/appearance.json` (BoxTop/BoxBottom/BatteryHolder = **Accent orange (9)**, both hooks = **Signal
+  blue (11)**, LiPo = Grey nylon (4), servo = Steel (6)) — already wired via `applyAppearance`; loads clean (404 gone).
+  *(Palette is 0-indexed: 9=orange, 10=red, 11=blue.)* (4) **Case-study sync:** ported the **System-architecture SVG**
+  + patterns list + highlight dives + status from `projects/blindmaster.html` into the viewer's `#case` (Overview →
+  System architecture → Highlights → Status). (5) **Landing wiring:** the BlindMaster **featured card** now
+  `href="viewers/blindmaster/index.html"` + `.d3` 3D badge + "Open the 3D walkthrough →"; the skill-popover `PROJECTS`
+  map entry repointed too. Verified: gears retimed, no floating board, appearance applied, case diagram renders, card DOM correct.
+- **2026-06-10** — **BlindMaster viewer: design locked + foundation built & verified** (`viewers/blindmaster/`).
+  The user gave a storyboard for the smart-blinds hub (`servobox.glb`) and asked which other segments fit.
+  Researched the model (rendered/measured it via a throwaway `_inspect.html` + `/private/tmp/bm_inspect.cjs`
+  — the GLB's POSITION accessors have **no min/max**, so JSON-only bounds collapse to ~0; must load through
+  three.js) AND the firmware (`BlindMaster/Blinds_XIAO`). **Key firmware findings that shaped the storyboard:**
+  the 11-position model (`Calibration::convertToTicks`) is a **linear tilt sweep** across the calibrated tick
+  range — 0 = slats closed-down, **5 = flat/open**, 10 = closed-up (venetian *tilt*, not raise/lower), spanning
+  **several gear turns**; and the **two EC12 encoders** are `topEnc` (tracks the motor-driven gear) + `bottomEnc`
+  (a **manual wand** — turn the blind by hand and the servo follows via `baseDiff`/`effDiff` in `servo.cpp`). So
+  the user's "mechanism back-and-forth" beat and a new "11-position payoff" beat **unify into one tilt-sweep act**.
+  Agreed extra beats with the user (all three): (A) 11-position payoff, (B) full-stack finale **last**, (C) a
+  power micro-beat folded into the battery view; plus the mounting plate as its own small hinge beat. **Built the
+  foundation** `viewers/blindmaster/index.html` from the RescueVision template: `classify()` for 12 vis-groups
+  (`servo/drive/encgear/enc/bottomhook/xiao/battery/power/pcb/box/plate/other`), orientation (the GLB ships
+  **Y-up already** — mounting hook toward +Y — so no standup needed, just hash-tunable `#rx/#ry/#rz`), the full
+  9-beat chapter list (intro → form-factor×2 → mounting-plate → drivetrain×2 → re-assemble → electronics top →
+  battery+power → finale → settle), dock to a ported case study, `#dbg` group-colour mode. **Verified** via
+  headless renders: loads clean (only the expected `appearance.json` 404), classify + Y-up orientation correct,
+  translucent-box drivetrain focus reads well. **Render insight:** the "hook with gear" is the **top** hook
+  (servo-driven, cog at its base); the **bottom hook** is on its own shaft (the manual-wand control); the
+  big hinged flat panel = `BoxTop` = the **mounting plate** (✓); the **XIAO is modeled exploded OUT to the side**
+  (user says it should sit inside the box, USB-C poking out — needs relocating).
+- **2026-06-10** — **BlindMaster drivetrain + 11-position payoff act built & verified.** The user confirmed the
+  kinematics: **1:1 opposite** meshing gears, **1 turn per position step** (10 turns for 0→10), and the **bottom
+  hook is an independent manual wand** (NOT servo-driven → stays put when animating app-driven motion). Built
+  `buildDrivetrain()`: finds the `drive` (hook-gear) + `encgear` meshes, derives each shaft's world-Y axis as the
+  XZ centroid of the gear **disk** (drive uses only its lower 45% so the hook doesn't skew the axis; encoder gear
+  uses all verts), snapshots `base`/`parentInv` world matrices + `matrixAutoUpdate=false`. `spinGear(g,angle)`
+  rotates about world +Y through the pivot (`local = parentInv · T(piv)·Ry·T(-piv) · base`). `onResolve` drives
+  `curPos = posAt(s)` over the drivetrain range `[0.32,0.62]` (keyframes
+  `5→0→10→0→10→5` = a couple of back-and-forths ending open), `driveAngle = pos·2π`, encoder gear `−angle`.
+  **Key trick:** every integer position = whole turns → the hook sits at base orientation, so resetting the gears
+  for the next (assembled) beat shows **no snap**. `drawDims('drive')` renders the readout (lower-left): a
+  **venetian-slat glyph** whose slat projected height = openness (thin/gapped at pos 5 = OPEN with a sky-gradient
+  showing through, solid when closed at 0/10), a big `N / 10` + `POSITION · OPEN/CLOSING ↑↓`, and
+  `ENCODER · {pos·24} ticks · {pos} turns` (EC12 = 24 detents/turn). The two drivetrain chapters carry
+  `act:'drive'` + `dims:'drive'` (the dims overlay holds across both). **Verified** headless at multiple scroll
+  points: gears rotate in tandem, wand static, slats track 0↔10, labels correct, seamless reset (only the expected
+  `appearance.json` 404). *(Note: shotu.cjs's scrollFrac runs a few % ahead of storyboard `p` because the page
+  also includes the case-study article after the spacer — read the live `#hud-progress`, don't trust the frac.)*
+  **Still to build:** `drawDims('size')` dimension call-outs, the mounting-plate hinge animation, the full-stack
+  finale actors (app↔server↔hub + BLE arc), XIAO relocation, and an appearance/colour pass.
+- **2026-06-10** — **Appearance JSON compaction (854 KB → 1.4 KB).** The user flagged `rescuevision/appearance.json`
+  as suspiciously huge (**854 227 bytes / 58 551 lines**) and asked if it was a perf risk. Diagnosed: no
+  *runtime* cost (the JSON is gone after load → materials/groups), but real download+parse waste + noisy git diffs,
+  and it encoded **contradictory/dead data**. Three multiplicative bloat sources, all in `mesh_2_3#5`: (1) the
+  editor only ever *appends* face entries and never compacts, so the same 9 914-tri body was painted **5×** across
+  sessions (3× app 5, 2× app 2) — `paintFacesMulti` is last-wins per triangle (`slotOf[t]=slot`), so 4 copies were
+  dead; (2) no run-length encoding (a connected body is mostly *consecutive* indices — 9 914 → 59 runs); (3)
+  pretty-print (`JSON.stringify(…,null,2)`) put every index on its own line (→ the 58 k lines). **Fix in
+  `viewers/shared/appearance.js`:** added `expandTris` (reads BOTH legacy flat `[i,…]` and new RLE `[[s,e],…]`),
+  `encodeRuns`, and exported **`compactAppearance(json, triCountOf)`** — flatten last-wins per mesh → drop face
+  tris equal to the base `part` (fall-through) → promote whole-mesh single-app to `parts` → merge by app +
+  RLE-encode. `groupFaces` now `expandTris`-es on read (both `applyAppearance` *and* the editor); the editor
+  constructor normalizes loaded faces to flat; `exportJSON` routes through `compactAppearance` and stops
+  pretty-printing. **Migrated the live file in place** via the *real* shipping `compactAppearance` (imported
+  in-browser through the headless harness → zero logic drift): 854 KB → **1 423 bytes / 1 line** (~600×). Result
+  is just `mesh_2_3#5` app 5 = 8 760 tris in **18 ranges** + 2 tiny entries (the 9 914 app-2 tris dropped as
+  identical-to-base-part). **Verified:** loads with no console errors; pixel-diffed BEFORE/AFTER at 5 storyboard
+  beats and **the user confirmed it renders identically**. Decided AGAINST a "store one seed tri + re-flood at
+  load" scheme — most compact but depends on stable vertex ordering across GLB re-exports, which has already bitten
+  this project (SmartPT's `mesh_1*`/`mesh_2*` renumber). Original backed up at
+  `/private/tmp/appearance.rescuevision.orig.json`. (SmartPT's `appearance.json` was already tiny — 1.4 KB,
+  parts/faces empty — so nothing to migrate there; new exports compact automatically.)
+- **2026-06-10** — **Portrait fit scale (`PORTRAIT_FIT`).** The pan fix centred the model but a *wide* model
+  (e.g. the guadaloop yoke) still clipped off the sides on portrait, because base framing only fits the
+  largest dimension in the **vertical** FOV — the narrower **horizontal** FOV on portrait isn't accounted
+  for. Added `PORTRAIT_FIT` (engine.js, near `PAN_FULL_ASPECT`): `frameCamera` now multiplies `dist` by
+  `fitScale = 1 + max(0, tan(vHalf)/tan(hHalf) − 1) · PORTRAIT_FIT`, where `hHalf = atan(tan(vHalf)·aspect)`.
+  So it **zooms the camera out only on narrow/portrait viewports** to also fit the width (0 = off/old, 1 =
+  fully fit width; landscape/desktop compute `fitScale=1`, untouched). **Default 0.8.** Live-tunable by eye
+  with a `#pfit=` URL hash (parsed once at module load). Verified guadaloop yoke beat: pfit 0 clips the left
+  leg + W call-out; **0.8 fits the whole model** with both H/W call-outs; landscape (844×390) pixel-identical.
+- **2026-06-10** — **Cache-control / forced-reload fix (deploy).** Recorded that the site is hosted on
+  **Cloudflare Pages** at **aditya.pulipaka.com** (repo `pulipakaa24/personal_site`, branch `main`; a push
+  auto-deploys). Diagnosed why CSS/JS edits weren't showing up (the user hit it in Safari): live headers
+  (`curl -sI`) showed HTML + `.glb` served `cache-control: public, max-age=0, must-revalidate` (always
+  revalidate → fresh each load) but **`.css`/`.js` served `max-age=14400, must-revalidate`** — Cloudflare's
+  default 4-hour **Browser Cache TTL** pinned the stylesheets/scripts with no revalidation, so edits to
+  `project.css`/`project.js`/`viewer.css`/`engine.js`/`appearance.js` could lag up to 4h in any browser (NOT
+  a device-side issue). **Fix:** added a Pages **`_headers`** file (repo root) forcing `*.css`/`*.js` (and
+  explicitly `*.html`) to `public, max-age=0, must-revalidate` so they revalidate every load (ETag → cheap
+  304 when unchanged) like the HTML already does. Takes effect on the next push (Pages reads `_headers` from
+  the build-output root = repo root). **Verify post-deploy:** `curl -sI https://aditya.pulipaka.com/assets/project.css`
+  should now report `max-age=0`. If it still shows `max-age=14400`, the **zone-level** Browser Cache TTL is
+  overriding response headers → in the Cloudflare dashboard set *Caching → Configuration → Browser Cache TTL
+  → "Respect Existing Headers"* (the `_headers` value then wins). (Considered a `?v=<hash>` pre-commit
+  cache-bust hook as a bulletproof, CDN-independent alternative — deferred; `_headers` chosen for zero
+  per-push churn. If we ever add it, note `appearance.js` imports `./engine.js`, so the nested import must be
+  stamped consistently with the HTML-level `engine.js?v=` ref or engine.js loads twice as two module URLs.)
 - **2026-06-10** — **Landing-page mobile fixes** (`index.html`). (1) **Coursework** was a 2-col grid of groups
   that stayed 2-col on phones (it was missing from the `@media(max-width:860px)` `grid-template-columns:1fr`
   list — `.skillgroups` was there, `.coursegroups` wasn't) → added `.coursegroups` so the groups stack into
@@ -688,7 +816,10 @@ Newest first. Append an entry whenever you ship something.
   `@media(max-width:640px)` viewer layout. iPhone/iOS-sim/real-WebKit verification loops documented in §6.)*
 - 🔄 **Confirm the coordinate-axis out-sign combo** (`#cs1y/#cs1z/#cs2x/#cs2z`) so it can be baked as
   default and the hash dropped. *(Awaiting the user's eyes on the clearer second view.)*
-- ⬜ Build the **BlindMaster** viewer (`servobox.glb`). Framework is ready; copy the RescueVision template.
+- 🔄 Build the **BlindMaster** viewer (`servobox.glb`). *(Design locked + foundation built & verified
+  2026-06-10 — see §18. Storyboard agreed with the user; remaining: scroll-tied drivetrain animation,
+  tilting-slat position overlay, dimension call-outs, mounting-plate hinge, full-stack finale, XIAO
+  relocation, appearance pass. Awaiting user's gear kinematics / motion study for the drivetrain beat.)*
 
 ---
 
@@ -696,9 +827,11 @@ Newest first. Append an entry whenever you ship something.
 
 1. **Bake the coordinate-axis out-signs** once the user confirms the combination (then remove the
    `#cs1y/#cs1z/#cs2x/#cs2z` hash handling). — *highest priority, just needs his confirmation.*
-2. **BlindMaster viewer** (`servobox.glb`) — copy `viewers/rescuevision/index.html`, write `classify()`,
-   storyboard the blinds-control device, dock to its case-study. Landing card already exists (weakest
-   thumbnail — candidate to swap for an app screenshot / device render).
+2. **BlindMaster viewer** (`servobox.glb`) — *foundation built (§18); storyboard locked.* Remaining:
+   the scroll-tied drivetrain animation (servo hook-gear ↔ encoder gear in tandem + bottom hook),
+   the tilting-slat 0–10 position overlay, dimension call-outs, the mounting-plate hinge mini-beat,
+   the full-stack finale (app↔server↔hub + BLE arc), relocating the exploded XIAO into the box, and an
+   appearance pass. Landing card already exists (weak thumbnail — candidate to swap for a device render).
 3. **SmartPT viewer polish** (§17 open items) — if the user wants: a base model rotation / dedicated
    camera so the knee flex reads in the screen plane; a more leg-like silhouette; dress the model colours
    via the **G** editor + commit `appearance.json`.
@@ -810,3 +943,59 @@ with the user (the tuner is theirs to drive).
 Inspector scaffolding used to derive all this (`_tree/_analyze/_hinge/_slots/_pockets/_imutest.html` +
 `/private/tmp/dumpglb.cjs, shothinge.cjs, shotsp.cjs, shotcase2.cjs`) was **deleted** after the build;
 recreate from this section's description if the model changes again.
+
+---
+
+## 18. BlindMaster viewer (`viewers/blindmaster/`) — FOUNDATION BUILT 2026-06-10 (in progress)
+
+**Device:** a full-stack IoT **smart-blinds hub** — `servobox.glb`, **64 meshes / 74 nodes**, ~**90 × 132 × 63 mm**
+(palm-sized; the "smaller than a phone" form-factor beat is real). The CAD is in **GLB Y-up already** (the
+mounting hook points toward **+Y**), so unlike RescueVision/SmartPT it needs **no standup** — just hash-tunable
+`#rx/#ry/#rz` (deg, world axes). Source GLB: `LinkedIn_Compiled/projects/blindmaster/servobox.glb` (copied into the
+viewer dir). Firmware source of truth: `BlindMaster/Blinds_XIAO/` (ESP-IDF).
+
+**vis-groups (`classify()`, compacted name chain):** `servo` (`crservo`), `drive` (`hookwithgear` — the **top**
+hook+gear the servo turns), `encgear` (`encodergear`), `enc` (`encoderec12e24204a2` — the **two** EC12 rotary
+encoders), `bottomhook` (`blindsbottomhook` — its own shaft at the base, likely the **manual wand**), `xiao`
+(`seeed|xiao|esp32c6|esp32s3` — modeled **exploded OUT** to the side; should be relocated into the box), `battery`
+(`lipo|batteryholder|phr2forbattery`), `power` (`stepupplaceholder` boost), `pcb` (`toppcb|bottompcbreal|xiaopcbplaceholder`),
+`plate` (`boxtop` — the big flat **mounting plate**, hinged), `box` (`boxbottom` — main enclosure body), `other`
+(pin headers, JST, eBom free-parts blob, button/port placeholders). Composite framing boxes: `boxes.mech`
+(servo+drive+encgear+enc+bottomhook), `boxes.elecTop` (xiao+pcb+servo), `boxes.elecBot` (battery+power).
+
+**The mechanism (from geometry + firmware):** a **continuous-rotation servo** (PWM via LEDC; `ccwSpeed/cwSpeed/offSpeed`
+in `defines.h`) turns the **hook-gear**; a meshed **encoder gear** (parallel **Y**-axis spur gears, thin in Y →
+rotation axis ≈ Y, offset ~one gear radius in X) drives a rotary encoder. **Two encoders:** `topEnc`
+(`ENCODER_PIN_A/B` D3/D6) tracks the motor-driven output for absolute position; `bottomEnc` (`InputEnc_PIN_A/B`
+D0/D1) is a **manual wand** — `servoWandListen` follows `baseDiff = bottomEnc − topEnc` so turning the blind by
+hand drives the servo to match. Quadrature decoded in `encoder.cpp` ISR; 4 sub-counts = 1 detent tick.
+
+**Position model (`calibration.cpp`) — the payoff:** calibration records `UpTicks` and `DownTicks` (the two travel
+extremes; multi-stage Socket.IO handshake, saved to NVS). `convertToTicks(appPos) = appPos*(Up−Down)/10 + Down +
+(Up−Down)/20` → appPos **0–10 maps LINEARLY across the full tick range**, each position centred in its bin (+half-step).
+`convertToAppPos` inverts + clamps. Per the case study it's a **venetian tilt**: **0 = closed-down, 5 = flat/open,
+10 = closed-up**, and the full sweep is **several gear turns** (the user stressed "more than 1/11 of a rotation").
+So the **drivetrain beat and the 11-position payoff are ONE act**: gears sweep a couple of turns ↔ slats tilt
+closed→open→closed ↔ a live `POSITION 0…5(OPEN)…10` + tick readout.
+
+**Storyboard (`#spacer` 1250vh; locked with the user):** intro → **01** form-factor ×2 (dimension call-outs,
+"smaller than a phone") → **02** mounting-plate hinge mini-beat → **03** drivetrain + 11-position payoff (box
+translucent; servo+drive+encgear+enc+bottomhook in focus; scroll-tied tandem gear rotation + bottom-hook rotation +
+tilting-slat position overlay; sub-beat on motor-encoder vs manual-wand) → re-assemble → **04** electronics
+top/servo side → **05** battery side + power story (MAX17048 fuel gauge / DFS / light-sleep / GPIO-gated servo,
+small SoC gauge) → **06** full-stack finale **last** (app↔server↔hub relay + orange **BLE provisioning arc** echoing
+the case-study SVG; a Socket.IO `set position` command drives the gear) → settle → dock to the shared `project.css`
+case study. Hash: `#dbg` (group-colour check), `#rx/#ry/#rz` (orientation).
+
+**Status (2026-06-10):** load/orient/classify, all 9 beats (framing + panels + translucency), dock + **synced** case
+study (architecture SVG ported from `projects/blindmaster.html`), the drivetrain + 11-position payoff act, the
+appearance pass (`appearance.json` wired), the **XIAO reconstitution** (floating module hidden → labeled placeholder),
+and the **landing-page wiring** (featured card + PROJECTS map → the viewer, 3D badge) all built & verified headless.
+**Gear kinematics (user-confirmed):** 1:1 opposite, **½ turn/step** (`STEP_TURNS`), rotation anchored at pos 5; bottom
+hook is an **independent manual wand** (stays put under app-driven motion). Sweep `POS_KEYS = 5→0→10→5` (~1.5 passes).
+See `buildDrivetrain`/`spinGear`/`posAt`/`drawDims('drive')` + the two changelog entries. **Still to build:** (1)
+`drawDims('size')` dimension call-outs (form-factor beats); (2) the **mounting-plate hinge** animation (beat 02,
+`plate`/BoxTop about its hinge); (3) the **full-stack finale** actors (app↔server↔hub relay + orange BLE provisioning
+arc + a Socket.IO command driving the gear; beat 06, `finale:true`). Confirmed blind type = **venetian tilt** (per the
+0/5/10 model). Throwaway inspector: `viewers/blindmaster/_inspect.html` + `/private/tmp/bm_inspect.cjs, bm_xiao.cjs`
+(delete after build, like the SmartPT inspectors).

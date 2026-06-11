@@ -1,0 +1,52 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>BM inspect</title>
+<style>html,body{margin:0;height:100%;background:#000}#c{width:100vw;height:100vh;display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<canvas id="c"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { createStudioScene, loadGLB, prepareMeshes, centerModel, frameCamera, makeSlot, VIEWS } from '../shared/engine.js';
+
+const canvas = document.getElementById('c');
+const { renderer, scene, camera } = createStudioScene(canvas, { exposure:1.1, fov:35 });
+function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+addEventListener('resize',resize); resize();
+
+const compact = s => (s||'').replace(/[^a-z0-9]/gi,'').toLowerCase();
+
+loadGLB('./servobox.glb').then(gltf=>{
+  const model = gltf.scene;
+  prepareMeshes(model, m=>{ m.roughness=Math.max(m.roughness??0.5,0.45); });
+  const box = centerModel(model, scene);
+
+  // per-mesh world AABBs + ancestor name chain
+  const parts = [];
+  model.updateWorldMatrix(true,true);
+  model.traverse(o=>{
+    if(!o.isMesh) return;
+    const b = new THREE.Box3().setFromObject(o);
+    const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
+    const chain=[]; let p=o; while(p){ if(p.name) chain.push(p.name); p=p.parent; }
+    parts.push({ name:o.name||'(unnamed)', chain:compact(chain.join('/')),
+      c:[+c.x.toFixed(3),+c.y.toFixed(3),+c.z.toFixed(3)],
+      s:[+s.x.toFixed(3),+s.y.toFixed(3),+s.z.toFixed(3)], key:o.userData.key });
+  });
+  const whole = new THREE.Box3().setFromObject(model);
+  const ws = whole.getSize(new THREE.Vector3()), wc = whole.getCenter(new THREE.Vector3());
+
+  // frame iso
+  const qs = new URLSearchParams(location.search);
+  const fit = qs.get('fit') || (location.hash.match(/fit=([\d.]+)/)||[])[1] || 1.0;
+  const view = qs.get('view') || (location.hash.match(/view=(\w+)/)||[])[1] || 'iso';
+  const out=makeSlot(); frameCamera(camera, box, view, 0, +fit, out);
+  camera.position.copy(out.pos); camera.up.copy(out.up); camera.lookAt(out.target);
+
+  window.__bm = { parts, whole:{ size:[+ws.x.toFixed(3),+ws.y.toFixed(3),+ws.z.toFixed(3)], center:[+wc.x.toFixed(3),+wc.y.toFixed(3),+wc.z.toFixed(3)] } };
+  window.__ready = true;
+  renderer.render(scene,camera);
+});
+
+function tick(){ renderer.render(scene,camera); requestAnimationFrame(tick); }
+tick();
+</script>
+</body></html>

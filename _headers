@@ -1,0 +1,21 @@
+# Cloudflare Pages headers — controls browser caching so pushes show up immediately.
+# Docs: https://developers.cloudflare.com/pages/configuration/headers/
+#
+# Problem this fixes: Cloudflare's default Browser Cache TTL pins .css/.js in the
+# browser for 4 hours with NO revalidation, so edits to project.css / project.js /
+# viewer.css / engine.js / appearance.js didn't show up on reload (notably Safari).
+# HTML and .glb already serve `max-age=0, must-revalidate` (always fresh), so we only
+# need to bring CSS/JS in line.
+
+# Stylesheets & scripts: revalidate on every load. The ETag means an unchanged file
+# returns a cheap 304 (no re-download); a changed file is fetched fresh. No more 4h pin.
+/*.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+# HTML entry points (explicit; they already behave this way). The HTML is the carrier
+# that references the CSS/JS above, so keeping it always-fresh forces fresh everything.
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate

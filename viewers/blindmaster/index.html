@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BlindMaster — Full-stack IoT Smart Blinds · Aditya Pulipaka</title>
+<link rel="icon" href="../../assets/logo.png" />
+<link rel="stylesheet" href="../shared/viewer.css" />
+<!-- the case-study write-up below the storyboard reuses the SAME identity as every
+     project page (projects/*.html). -->
+<link rel="stylesheet" href="../../assets/project.css" />
+<style>
+  /* storyboard scroll length (the fixed canvas plays through this height) */
+  #spacer { height: 1250vh; }
+
+  /* The docked card (#c.docked) + #dockhint styles are shared — see viewer.css. */
+  #case { position: relative; z-index: 5; padding: 15vh 0 4vh; }
+  #case .award { display:inline-block; border:1px solid var(--accent); color:var(--accent);
+                 border-radius:999px; padding:6px 14px; font-size:12px; letter-spacing:.12em;
+                 text-transform:uppercase; margin-bottom:1.5rem; }
+  #case .lede { font-size:clamp(19px,2.4vw,30px); line-height:1.33; font-weight:600;
+                letter-spacing:-.01em; color:rgba(255,255,255,.92); max-width:44ch; margin:0 0 8px; }
+  #case .dive ul { list-style:none; margin-top:2px }
+  #case .dive li { font-size:14px; color:var(--muted); line-height:1.5; padding:5px 0 5px 16px; position:relative }
+  #case .dive li::before { content:"›"; position:absolute; left:0; color:var(--accent); font-weight:800 }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="../../index.html"><img src="../../assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
+  <div class="navright">
+    <span class="lbl">BlindMaster</span>
+    <a class="pbtn" href="../../index.html#work">← Back to work</a>
+  </div>
+</nav>
+
+<div id="loader">Loading model…</div>
+<canvas id="c"></canvas>
+
+<!-- storyboard overlays (fixed) -->
+<div id="title"><h1>Blind<br><span class="ol">Master</span></h1><p>full-stack IoT smart blinds · scroll</p></div>
+<div id="panel"><span class="kick"></span><h2></h2></div>
+<div id="blurb"></div>
+<div id="dims"></div>
+<div id="dockhint">Click to replay the 3D · minimise ›</div>
+
+<div id="hud-progress" class="hud">0%</div>
+<div id="scrollhint">scroll ↓</div>
+<div id="hint">press <b>G</b> for the appearance editor</div>
+
+<!-- editor shell (filled by AppearanceEditor) -->
+<div id="editor"><div id="legend"></div><div id="picked">click a part…</div></div>
+<div id="dump"><span class="x" id="dumpClose">✕ close</span><div style="margin-bottom:8px;font-size:12px;opacity:.7">Copied to clipboard. Save this as <b>appearance.json</b> in this folder, then reload.</div><textarea id="dumpText" readonly></textarea></div>
+
+<!-- scroll length for the storyboard -->
+<div id="spacer"></div>
+
+<!-- case study (normal flow, scrolls in after the storyboard docks) -->
+<article id="case">
+  <div class="wrap">
+    <span class="award">Full-stack IoT · Solo · 3 codebases</span>
+    <p class="lede">Smart blinds you control, schedule, and calibrate end-to-end — a Flutter app talks to an Express server over Socket.IO, which relays to ESP32-C6 hubs, with BLE-only provisioning for the first handshake.</p>
+
+    <dl class="facts reveal">
+      <div><dt>Role</dt><dd>Solo · firmware + backend + app</dd></div>
+      <div><dt>Stack</dt><dd>ESP-IDF · Express/Socket.IO · Flutter</dd></div>
+      <div><dt>When</dt><dd>Ongoing · pre-release</dd></div>
+      <div><dt>Status</dt><dd>Functional prototype</dd></div>
+    </dl>
+
+    <section class="block reveal">
+      <h2>Overview</h2>
+      <p>A Flutter app talks to an Express server over Socket.IO/HTTPS, which relays commands to ESP32-C6
+        hubs — also over Socket.IO — with BLE used only for the initial Wi-Fi + auth handshake. Blind
+        position is unified across all three codebases as an 11-step model (0–10, where 5 = fully open).</p>
+    </section>
+
+    <section class="block reveal">
+      <h2>System architecture</h2>
+      <figure class="figure reveal">
+        <div style="padding:24px 18px; background:#0a0a0a">
+          <svg viewBox="0 0 820 400" role="img" aria-label="BlindMaster system architecture diagram" style="width:100%; height:auto; display:block">
+            <title>BlindMaster system architecture</title>
+            <desc>The Flutter app and ESP32-C6 hubs communicate only through the Express server over Socket.IO/HTTP with JWT and TLS. BLE links the phone directly to the device for one-time provisioning. The server persists to PostgreSQL and MongoDB and sends email via Mailgun.</desc>
+            <style>
+              .nd{fill:#101013;stroke:#ffffff2b;stroke-width:1.5}
+              .nd.acc{stroke:#ff6a00;stroke-width:1.6}
+              .lid{fill:#17171b;stroke:#ffffff2b;stroke-width:1.5;fill-opacity:1}
+              .t{fill:#fff;font-weight:700;font-size:15px}
+              .s{fill:#ffffff8c;font-size:10.5px}
+              .mono{font-family:ui-monospace,Menlo,Consolas,monospace;fill:#ff8a3a;font-size:10px}
+              .ln{stroke:#ffffff47;stroke-width:1.6;fill:none}
+              .lbl{fill:#ffffff8c;font-size:10px}
+              .lbl2{fill:#ffffff52;font-size:9.5px}
+              .ble{stroke:#ff6a00;stroke-width:1.6;fill:none;stroke-dasharray:5 5}
+              .blelbl{fill:#ff6a00;font-size:10.5px;font-weight:600}
+              svg text{text-anchor:middle;dominant-baseline:middle;font-family:"Helvetica Neue",Arial,sans-serif}
+            </style>
+            <defs>
+              <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6,3 L0,6 Z" fill="#ffffff99"/></marker>
+              <marker id="ahS" markerWidth="9" markerHeight="9" refX="0" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M6,0 L0,3 L6,6 Z" fill="#ffffff99"/></marker>
+              <marker id="bah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L6,3 L0,6 Z" fill="#ff6a00"/></marker>
+              <marker id="bahS" markerWidth="9" markerHeight="9" refX="0" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M6,0 L0,3 L6,6 Z" fill="#ff6a00"/></marker>
+            </defs>
+
+            <!-- BLE provisioning arc (phone ↔ device directly, setup only) -->
+            <path class="ble" d="M120,92 C120,34 700,34 700,92" marker-start="url(#bahS)" marker-end="url(#bah)"/>
+            <text class="blelbl" x="410" y="26">BLE provisioning · setup only</text>
+
+            <!-- top-row data plane connectors -->
+            <line class="ln" x1="210" y1="129" x2="320" y2="129" marker-start="url(#ahS)" marker-end="url(#ah)"/>
+            <text class="lbl"  x="265" y="113">Socket.IO / HTTP</text>
+            <text class="lbl2" x="265" y="150">JWT · TLS</text>
+            <line class="ln" x1="500" y1="129" x2="610" y2="129" marker-start="url(#ahS)" marker-end="url(#ah)"/>
+            <text class="lbl"  x="555" y="113">Socket.IO / HTTP</text>
+            <text class="lbl2" x="555" y="150">JWT · TLS</text>
+
+            <!-- server → backing services bus -->
+            <path class="ln" d="M410,166 V224 M120,224 H700 M120,224 V300 M410,224 V300 M700,224 V300"/>
+
+            <!-- primary nodes -->
+            <rect class="nd"     x="30"  y="92" width="180" height="74" rx="13"/>
+            <text class="t"    x="120" y="122">Flutter App</text>
+            <text class="mono" x="120" y="143">blinds_flutter</text>
+
+            <rect class="nd acc" x="320" y="92" width="180" height="74" rx="13"/>
+            <text class="t"    x="410" y="122">Express Server</text>
+            <text class="mono" x="410" y="143">blinds_express</text>
+
+            <rect class="nd"     x="610" y="92" width="180" height="74" rx="13"/>
+            <text class="t"    x="700" y="122">XIAO ESP32-C6</text>
+            <text class="mono" x="700" y="143">Blinds_XIAO</text>
+
+            <!-- backing services -->
+            <path class="nd"  d="M30,309 C30,300 210,300 210,309 L210,375 C210,384 30,384 30,375 Z"/>
+            <path class="lid" d="M30,309 C30,318 210,318 210,309"/>
+            <text class="t"  x="120" y="334" font-size="14">PostgreSQL</text>
+            <text class="s"  x="120" y="354">users · devices · peripherals</text>
+            <text class="s"  x="120" y="368">groups · tokens</text>
+
+            <path class="nd"  d="M320,309 C320,300 500,300 500,309 L500,375 C500,384 320,384 320,375 Z"/>
+            <path class="lid" d="M320,309 C320,318 500,318 500,309"/>
+            <text class="t"  x="410" y="338" font-size="14">MongoDB</text>
+            <text class="s"  x="410" y="358">Agenda jobs · schedules</text>
+
+            <rect class="nd" x="610" y="300" width="180" height="84" rx="13"/>
+            <text class="t"  x="700" y="334" font-size="14">Mailgun</text>
+            <text class="s"  x="700" y="356">verification ·</text>
+            <text class="s"  x="700" y="370">reset emails</text>
+          </svg>
+        </div>
+        <figcaption>Server-as-relay topology: the Flutter app and ESP32-C6 hubs talk only through the
+          Express server (Socket.IO/HTTP over TLS); BLE links the phone to the device for one-time
+          provisioning.</figcaption>
+      </figure>
+      <ul style="margin-top:22px">
+        <li><b>Server as relay</b> — all app↔device traffic routes through the server after provisioning.</li>
+        <li><b>Dual-path updates</b> — Socket.IO for real-time, HTTP polling as a fallback.</li>
+        <li><b>BLE-only provisioning</b> — the phone delivers Wi-Fi creds + initial JWT straight to the ESP32, never via the server.</li>
+        <li><b>One 11-position model</b> shared across HTTP, Socket.IO, and BLE keeps the firmware tiny and the UI legible.</li>
+      </ul>
+    </section>
+
+    <section class="block reveal">
+      <h2>Highlights</h2>
+      <div class="dives">
+        <div class="dive">
+          <h3>One drivetrain, closed-loop both ways</h3>
+          <p>A continuous-rotation servo turns a gear that tilts the blind; a meshed encoder gear feeds a rotary encoder that counts ticks for absolute position. A second encoder is a manual wand — turn the blind by hand and the servo follows it.</p>
+        </div>
+        <div class="dive">
+          <h3>Calibration as a Socket.IO handshake</h3>
+          <p>A multi-stage exchange (<code>calib_start → stage1 → stage2 → calib_done</code>): the device records the "up" then "down" tick extremes as the user moves the blind, and the tick→position mapping is saved to NVS — the server is a pure relay.</p>
+        </div>
+        <div class="dive">
+          <h3>BLE for provisioning only</h3>
+          <p>Wi-Fi creds + JWT go over a custom NimBLE service; once provisioned, BLE goes dormant and all real-time traffic switches to Socket.IO. Trade-off: LE Secure Connections without bonding, assuming physical proximity at setup.</p>
+        </div>
+        <div class="dive">
+          <h3>Power management on the ESP32-C6</h3>
+          <p>Dynamic frequency scaling (80–160 MHz), light sleep when idle, GPIO-gated servo power, and a MAX17048 fuel gauge for state-of-charge telemetry and a low-battery warning under 20%.</p>
+        </div>
+        <div class="dive">
+          <h3>Hardened backend</h3>
+          <p>Layered rate limits (HTTP, auth, WS connects/messages, email), JWT + Argon2 auth, and boot-time cleanup of stale connections and expired tokens so restarts don't leave zombie devices.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block reveal">
+      <h2>Status</h2>
+      <ul>
+        <li>So close to having a demo! Functional prototype — provisioning, real-time control, scheduling, multi-device groups, and the full user lifecycle all work.</li>
+        <li>A <code>taskdrivenpowersave</code> branch (deeper power management) will replace main; then it may be released, with the app on TestFlight and the hardware open-sourced.</li>
+      </ul>
+    </section>
+  </div>
+
+  <footer class="wrap">
+    <a href="../../index.html#work">← All work</a>
+    <a href="../rescuevision/index.html">Next: RescueVision →</a>
+  </footer>
+</article>
+
+<script type="module">
+import {
+  createStudioScene, loadGLB, prepareMeshes, centerModel, setOpacity,
+  frameCamera, makeVis, Storyboard, DockController, pca, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, THREE
+} from '../shared/engine.js';
+import { AppearanceEditor, applyAppearance } from '../shared/appearance.js';
+
+const canvas = document.getElementById('c');
+const { renderer, scene, camera, controls, updateHeadlights } = createStudioScene(canvas, { exposure: 1.0, near: 0.0005, far: 50 });
+
+// ---------- vis-groups ----------
+const VG = ['servo','drive','encgear','enc','bottomhook','xiao','battery','power','pcb','box','plate','other'];
+const vis = makeVis(VG);
+const TRANS = 0.14;
+// classify a mesh by walking its ancestor name chain. GLTFLoader strips spaces &
+// dots, so compact the chain to alnum before matching (see CLAUDE.md §5).
+function classify(o){
+  let names = [], n = o; while (n){ if (n.name) names.push(n.name); n = n.parent; }
+  const p = names.join('/').replace(/[^a-z0-9]/gi,'').toLowerCase();
+  if (/crservo/.test(p))                      return 'servo';
+  if (/hookwithgear/.test(p))                 return 'drive';      // servo-side hook + gear
+  if (/encodergear/.test(p))                  return 'encgear';    // gear that drives the rotary encoder
+  if (/encoderec12e24204a2/.test(p))          return 'enc';        // the two EC12 rotary encoders
+  if (/blindsbottomhook/.test(p))             return 'bottomhook';
+  if (/seeed|xiao|esp32c6|esp32s3/.test(p))   return 'xiao';
+  if (/lipo|batteryholder|phr2forbattery/.test(p)) return 'battery';
+  if (/stepupplaceholder/.test(p))            return 'power';      // boost converter
+  if (/toppcb|bottompcbreal|xiaopcbplaceholder/.test(p)) return 'pcb';
+  if (/boxtop/.test(p))                       return 'plate';      // large flat panel (mounting plate, hinged)
+  if (/boxbottom/.test(p))                    return 'box';        // main enclosure body
+  return 'other';
+}
+
+const SECTION = {
+  form:  { kick:'Form factor · 01', title:'Pocket<br>Sized' },
+  mount: { kick:'Mounting · 02',    title:'Clips&nbsp;On' },
+  drive: { kick:'Drivetrain · 03',  title:'Tilt&nbsp;&amp;<br>Track' },
+  elec:  { kick:'Electronics · 04', title:'The<br>Brains' },
+  power: { kick:'Power · 05',       title:'Runs<br>For&nbsp;Weeks' },
+  system:{ kick:'Full-stack · 06',  title:'End&nbsp;to<br>End' },
+};
+
+// ---------- state ----------
+let meshes = [], chapters = [], story = null, editor = null;
+const boxes = {};
+const centers = {};
+let S = 1;
+let dock = null;
+const dimsEl = document.getElementById('dims');
+let actors = null;
+const DBG = location.hash.includes('dbg');
+
+// drivetrain (built after load) — 1:1 opposite meshing gears, 1 turn / position step.
+// The bottom hook is an INDEPENDENT manual wand (not servo-driven) so it stays put
+// when we animate app-driven motion.
+let drivetrain = null;
+let curPos = 5;                 // live blind position 0..10 (5 = open) for the readout
+const TILT_MAX = 78;           // slat tilt at the closed extremes (deg)
+const STEP_TURNS = 0.5;        // gear turns per position step (1 step = half a turn)
+const TICKS_PER_TURN = 24;     // EC12E24204A2 detents/turn (for the encoder tick readout)
+const _R = new THREE.Matrix4(), _Ry = new THREE.Matrix4(), _T1 = new THREE.Matrix4(),
+      _T2 = new THREE.Matrix4(), _W = new THREE.Matrix4(), _L = new THREE.Matrix4();
+
+// ---------- load ----------
+let APPEARANCE = null;
+fetch('appearance.json').then(r => r.ok ? r.json() : null).then(j => APPEARANCE = j).catch(()=>{}).finally(start);
+
+async function start(){
+  let gltf;
+  try { gltf = await loadGLB('servobox.glb'); }
+  catch(err){ document.getElementById('loader').innerHTML = '<div style="color:#f55">Failed to load servobox.glb — serve over HTTP.</div>'; console.error(err); return; }
+  const model = gltf.scene;
+
+  meshes = prepareMeshes(model, (m) => {
+    m.envMapIntensity = 1.0;
+    if (m.metalness !== undefined){
+      m.roughness = m.metalness > 0.5 ? Math.max(m.roughness ?? 0.5, 0.34) : Math.max(m.roughness ?? 0.5, 0.5);
+    }
+  });
+  for (const o of meshes) o.userData.vis = classify(o);
+
+  // The detailed Seeed XIAO module is modeled exploded/floating OUTSIDE the box (its
+  // board + RF shield flew off to the back-right). The `xiaoPCB placeholder` (in the
+  // 'pcb' group) already sits correctly inside the box AND carries the Seeed/ESP32C6
+  // silkscreen label — it's the right stand-in. Drop the floating module entirely.
+  meshes = meshes.filter(m => { if (m.userData.vis === 'xiao'){ m.visible = false; return false; } return true; });
+
+  // ---- orientation ----
+  // The GLB appears to ship Y-up already (mounting hook toward +Y). Default to a
+  // yaw that presents the servo/component side to the iso camera; fine-tune live
+  // via #ry= (and #rx=/#rz=) in degrees, world axes.
+  model.rotation.set(0,0,0);
+  const hp = new URLSearchParams(location.hash.slice(1));
+  const deg = (k, d) => hp.has(k) ? +hp.get(k) : d;
+  model.rotateOnWorldAxis(new THREE.Vector3(1,0,0), deg('rx',0)*Math.PI/180);
+  model.rotateOnWorldAxis(new THREE.Vector3(0,1,0), deg('ry',0)*Math.PI/180);
+  model.rotateOnWorldAxis(new THREE.Vector3(0,0,1), deg('rz',0)*Math.PI/180);
+  model.updateMatrixWorld(true);
+
+  centerModel(model, scene);
+
+  boxes.all = new THREE.Box3(); meshes.forEach(m => boxes.all.expandByObject(m));
+  S = boxes.all.getSize(new THREE.Vector3()).length();
+  const ctrAll = boxes.all.getCenter(new THREE.Vector3());
+  const groupBox = (g) => { const b = new THREE.Box3(); meshes.filter(m => m.userData.vis === g).forEach(m => b.expandByObject(m));
+    if (b.isEmpty()) b.setFromCenterAndSize(ctrAll, new THREE.Vector3(1e-3,1e-3,1e-3)); return b; };
+  for (const g of VG){ boxes[g] = groupBox(g); centers[g] = boxes[g].getCenter(new THREE.Vector3()); }
+  // composite framing boxes
+  boxes.mech = boxes.servo.clone().union(boxes.drive).union(boxes.encgear).union(boxes.enc).union(boxes.bottomhook);
+  boxes.elecTop = boxes.pcb.clone().union(boxes.servo);   // xiao module hidden → frame the placeholder PCB + servo
+  boxes.elecBot = boxes.battery.clone().union(boxes.power);
+
+  buildDrivetrain(model);
+
+  if (DBG) colorByGroup();
+  applyAppearance(meshes, APPEARANCE);
+
+  defineChapters();
+  story = new Storyboard({
+    chapters, meshes, boxes, camera,
+    els: { title:document.getElementById('title'), panel:document.getElementById('panel'), blurb:document.getElementById('blurb'), dims:dimsEl, hud:document.getElementById('hud-progress') },
+    sections: SECTION,
+    hooks: { onResolve, drawDims }
+  });
+
+  editor = new AppearanceEditor({
+    renderer, scene, camera, controls, meshes, boxes,
+    toggleKey:'g', initial: APPEARANCE, onAfter: () => story.resolve(dock.shownProgress)
+  });
+  document.getElementById('dumpClose').addEventListener('click', () => document.getElementById('dump').style.display='none');
+
+  dock = new DockController({
+    canvas, renderer, camera, spacer: document.getElementById('spacer'),
+    getBox: () => boxes.all, onStory: (p) => story.resolve(p)
+  });
+
+  controls.target.copy(ctrAll);
+  story.resolve(0);
+  document.getElementById('loader').classList.add('hidden');
+}
+
+// debug: tint each vis-group a distinct hue so classify() can be eyeballed (#dbg)
+function colorByGroup(){
+  const HUE = { servo:0xff6a00, drive:0xffd000, encgear:0x00d0ff, enc:0x19d3ff, bottomhook:0xff3b6b,
+    xiao:0x57e07a, battery:0xb070ff, power:0xff9a3a, pcb:0x2ecc71, box:0x8899aa, plate:0xdddddd, other:0x444444 };
+  for (const m of meshes){ const c = HUE[m.userData.vis] ?? 0x444444;
+    m.material.color.setHex(c); m.material.metalness = 0.1; m.material.roughness = 0.7; }
+}
+
+// ---------- chapters ----------
+function defineChapters(){
+  const side = (sec, blurb, tag) => ({ mode:'side', sec, blurb, tag });
+  chapters = [
+    // intro / hero
+    { r:[0.00,0.06], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'hero'}, blurb:'', dims:null },
+
+    // 01 · form factor — a couple of swung views, dimension call-outs
+    { r:[0.06,0.15], box:'all', view:'iso', pan:0.42, vis:vis({ALL:1}),
+      panel:side('form','The whole hub is about 90&nbsp;×&nbsp;132&nbsp;×&nbsp;63&nbsp;mm — smaller than a phone. Everything (servo, drivetrain, battery and the ESP32-C6) lives in one palm-sized enclosure.','~90 × 132 × 63 mm'), dims:'size' },
+    { r:[0.15,0.22], box:'all', view:'side', pan:0.42, vis:vis({ALL:1}),
+      panel:side('form','Slim enough to sit flush against a window frame, deep enough to fit a LiPo and the drivetrain behind the faceplate.','Slim profile'), dims:'size' },
+
+    // 02 · mounting plate hinges
+    { r:[0.22,0.32], box:'plate', view:'iso', pan:0.42, vis:vis({ALL:TRANS, plate:1, box:0.4}),
+      panel:side('mount','The back plate clips the hub to the blind’s headrail. Modeled here swinging about its mounting hinge.','Clips on'), dims:null },
+
+    // 03 · drivetrain + position payoff (box translucent) — scroll-tied gears + slats
+    { r:[0.32,0.50], box:'mech', view:'iso', pan:0.30, act:'drive',
+      vis:vis({ALL:TRANS, servo:1, drive:1, encgear:1, enc:1, bottomhook:1}),
+      panel:side('drive','A continuous-rotation servo turns the hook-gear; a meshed encoder gear feeds the rotary encoder that counts ticks — 1:1, opposite directions. The bottom hook is a separate manual wand: turn the blind by hand and the servo follows.','Tilt & track'), dims:'drive' },
+    { r:[0.50,0.62], box:'mech', view:'iso', pan:0.30, act:'drive',
+      vis:vis({ALL:TRANS, servo:1, drive:1, encgear:1, enc:1, bottomhook:1}),
+      panel:side('drive','One 0–10 model (5 = open): each step is a full gear turn, so the encoder counts across the blind’s real travel — calibrated, then shared verbatim across the firmware, server and app.','0 → 5 → 10'), dims:'drive' },
+
+    // back to assembly
+    { r:[0.62,0.68], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
+
+    // 04 · electronics — top / servo side
+    { r:[0.68,0.78], box:'elecTop', view:'iso', pan:0.42, vis:vis({ALL:TRANS, pcb:1, servo:1}),
+      panel:side('elec','A Seeed XIAO ESP32-C6 runs the show — ESP-IDF + FreeRTOS, NimBLE for setup, Socket.IO for control — seated on the top PCB beside the servo, with the USB-C port out the side for flashing and charging.','XIAO ESP32-C6'), dims:null },
+    // 05 · electronics — bottom / battery side + power story
+    { r:[0.78,0.88], box:'elecBot', view:'isoL', pan:0.42, vis:vis({ALL:TRANS, battery:1, power:1, pcb:0.5}),
+      panel:side('power','A LiPo feeds a boost converter; a MAX17048 fuel gauge reports state-of-charge. Dynamic frequency scaling + light sleep + GPIO-gated servo power keep idle draw low.','Battery + BMS'), dims:null },
+
+    // 06 · full-stack finale (placeholder framing; actors wired next)
+    { r:[0.88,0.95], box:'all', view:'iso', pan:0, fit:1.6, vis:vis({ALL:1}),
+      panel:side('system','One node in a full stack: the Flutter app and ESP32-C6 hubs talk only through the Express server (Socket.IO/HTTP over TLS); BLE links the phone to the device for one-time provisioning.','App ↔ Server ↔ Hub'), dims:null, finale:true },
+
+    // settle — clean iso, framed for the dock
+    { r:[0.95,1.00], box:'all', view:'iso', pan:0, fit:2.0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
+  ];
+}
+
+// ---------- drivetrain: 1:1 opposite meshing gears, world-Y axes ----------
+// The hook-gear (servo-driven) and encoder gear mesh on parallel vertical (Y) shafts.
+// We rotate each mesh about world +Y through its own shaft centre. 1 turn per
+// position step → driveAngle = pos · 2π, encoder gear counter-rotates 1:1.
+function buildDrivetrain(model){
+  const driveMesh = meshes.find(m => m.userData.vis === 'drive');     // hook with gear
+  const encMesh   = meshes.find(m => m.userData.vis === 'encgear');   // encoder gear
+  if (!driveMesh || !encMesh) return;
+  model.updateMatrixWorld(true);
+  // shaft centre: XZ centroid of the gear DISK. The hook skews the drive part's
+  // bbox, so use only its lower portion (the cog) to find the axis; the encoder
+  // gear is a clean disk so use all of it.
+  const gearAxis = (mesh, lowerFrac) => {
+    const pos = mesh.geometry.attributes.position, v = new THREE.Vector3(), pts = [];
+    const step = Math.max(1, Math.floor(pos.count / 4000));
+    let ymin = 1e9, ymax = -1e9;
+    for (let i=0;i<pos.count;i+=step){ v.fromBufferAttribute(pos,i); mesh.localToWorld(v); pts.push(v.clone()); ymin=Math.min(ymin,v.y); ymax=Math.max(ymax,v.y); }
+    const cut = ymin + lowerFrac*(ymax-ymin);
+    let cx=0, cy=0, cz=0, n=0;
+    for (const q of pts){ if (q.y <= cut){ cx+=q.x; cy+=q.y; cz+=q.z; n++; } }
+    return new THREE.Vector3(cx/n, cy/n, cz/n);
+  };
+  const cap = (mesh) => ({ mesh, base: mesh.matrixWorld.clone(),
+    parentInv: mesh.parent.matrixWorld.clone().invert() });
+  const dg = cap(driveMesh), eg = cap(encMesh);
+  dg.pivot = gearAxis(driveMesh, 0.45);
+  eg.pivot = gearAxis(encMesh, 1.0);
+  for (const g of [dg, eg]) g.mesh.matrixAutoUpdate = false;
+  drivetrain = { drive: dg, enc: eg };
+}
+// rotate one gear about world +Y through its pivot by `angle` (radians); angle 0 = base.
+function spinGear(g, angle){
+  _Ry.makeRotationY(angle);
+  _T1.makeTranslation(g.pivot.x, g.pivot.y, g.pivot.z);
+  _T2.makeTranslation(-g.pivot.x, -g.pivot.y, -g.pivot.z);
+  _R.multiplyMatrices(_T1, _Ry).multiply(_T2);   // R = T(pivot)·Ry·T(-pivot)
+  _W.multiplyMatrices(_R, g.base);               // world = R · base
+  _L.multiplyMatrices(g.parentInv, _W);          // local = parentInv · world
+  g.mesh.matrix.copy(_L); g.mesh.updateMatrixWorld(true);
+}
+
+// scroll-tied position over the drivetrain act: open → close-down → close-up →
+// open. ~1.5 gentle passes (the middle 0→10 sweep gets most of the scroll), ending
+// open (5). Gear rotation is anchored at pos 5 (= the model's resting pose), so
+// every non-drive beat AND both act endpoints sit at the base orientation → no snap.
+const POS_KEYS = [[0,5],[0.26,0],[0.74,10],[1.0,5]];
+function posAt(s){
+  s = clamp01(s);
+  for (let k=1;k<POS_KEYS.length;k++){
+    if (s <= POS_KEYS[k][0]){
+      const [s0,p0] = POS_KEYS[k-1], [s1,p1] = POS_KEYS[k];
+      return lerp(p0, p1, smoothstep((s - s0) / (s1 - s0)));
+    }
+  }
+  return POS_KEYS[POS_KEYS.length-1][1];
+}
+const DRIVE_R = [0.32, 0.62];   // global scroll range of the two drivetrain beats
+
+// ---------- per-frame hook ----------
+function onResolve({ p, i, c, localT }){
+  if (!drivetrain) return;
+  // position 0..10 over the drivetrain act, else rest at open (gears at base)
+  curPos = (c.act === 'drive')
+    ? posAt((p - DRIVE_R[0]) / (DRIVE_R[1] - DRIVE_R[0]))
+    : 5;
+  // anchor rotation at pos 5 (the resting pose) → base orientation when open
+  const ang = (curPos - 5) * STEP_TURNS * Math.PI * 2;
+  spinGear(drivetrain.drive,  ang);
+  spinGear(drivetrain.enc,   -ang);     // 1:1, opposite
+}
+
+// ---------- position readout overlay (tilting slats + 0–10 model) ----------
+function drawDims(kind){
+  if (kind !== 'drive') return;
+  const W = innerWidth, H = innerHeight;
+  const n = Math.round(curPos);
+  const tiltDeg = (curPos - 5) / 5 * TILT_MAX;
+  const tiltRad = tiltDeg * Math.PI / 180;
+  const turns = (curPos * STEP_TURNS).toFixed(1);
+  const ticks = Math.round(curPos * STEP_TURNS * TICKS_PER_TURN);
+  const state = n === 5 ? 'OPEN' : (n < 5 ? 'CLOSING ↓' : 'CLOSING ↑');
+  // venetian-slat glyph: horizontal slats whose projected height = openness.
+  // flat/open (tilt 0) → thin slats, light through; tilted → thick, closed.
+  const gx = 64, gy = H - 372, gw = 168, gh = 150, N = 7;     // lower-left window
+  const pitch = gh / N, depth = pitch * 1.18, edge = 2;
+  const th = edge + depth * Math.abs(Math.sin(tiltRad));
+  let slats = '';
+  for (let k=0;k<N;k++){
+    const cy = gy + pitch*(k+0.5);
+    slats += `<rect x="${gx}" y="${(cy-th/2).toFixed(1)}" width="${gw}" height="${th.toFixed(1)}" rx="${Math.min(2.2,th/2).toFixed(1)}" fill="#cdd6e2"/>`;
+  }
+  const svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <!-- slat window -->
+    <rect x="${gx-12}" y="${gy-14}" width="${gw+24}" height="${gh+28}" rx="12" fill="#0b0d12" stroke="#ffffff1f"/>
+    <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d2836"/><stop offset="1" stop-color="#0e141d"/></linearGradient></defs>
+    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="4" fill="url(#sky)"/>
+    ${slats}
+    <!-- numeric readout -->
+    <text x="${gx-12}" y="${gy+gh+52}" fill="#fff" style="font:800 38px 'Helvetica Neue',Arial;letter-spacing:-.02em">${n}<tspan fill="#ffffff66" style="font:800 20px 'Helvetica Neue',Arial"> / 10</tspan></text>
+    <text x="${gx-12}" y="${gy+gh+74}" fill="#ff6a00" style="font:700 13px 'Helvetica Neue',Arial;letter-spacing:.16em">POSITION · ${state}</text>
+    <text x="${gx-12}" y="${gy-26}" fill="#ffffff8c" style="font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.04em">ENCODER · ${ticks} ticks · ${turns} turns</text>
+  </svg>`;
+  dimsEl.innerHTML = svg;
+}
+
+// ---------- loop ----------
+function tick(){
+  requestAnimationFrame(tick);
+  if (editor && editor.on){ controls.update(); }
+  else if (story && dock){ dock.update(); }
+  updateHeadlights();
+  renderer.render(scene, camera);
+}
+tick();
+</script>
+</body>
+</html>

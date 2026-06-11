@@ -310,9 +310,8 @@
   <div class="wrap">
     <span class="eyebrow">ECE Honors · UT Austin</span>
     <h1>Aditya<br><span class="l2">Pulipaka</span></h1>
-    <p class="lede">I build at the seam of <b>hardware and software</b> — embedded systems, robotics,
-      controls, and computer vision. From flight-control software to a levitating maglev rig
-      to award-winning sensor-fusion hacks.</p>
+    <p class="lede">I thrive at the intersection of <b>hardware and software</b>, with experience in embedded systems, robotics,
+      controls, and computer vision.</p>
     <div class="status"><span class="dot"></span><span class="status-roles"><span class="role">Currently: Embedded SWE Intern @ <b>Qualcomm</b></span><span class="sep">&nbsp;·&nbsp;</span><span class="role">Lev Subteam Lead @ <b>Guadaloop</b></span></span></div>
     <div class="cta">
       <a class="btn btn-solid" href="#work">View Work →</a>
@@ -342,13 +341,12 @@
       <div class="about-body reveal d1">
         <div class="idx">01 — About</div>
         <p>I'm an <b>ECE Honors undergraduate at UT Austin</b> who likes problems
-          that don't fit neatly into "hardware" or "software." I've shipped flight-control, maintenance, and testing software at
-          <b>Bell Flight</b>, written OS-level drivers at <b>Qualcomm</b>, built a LiDAR SLAM
+          that don't fit neatly into "hardware" or "software." I've written OS-level drivers at <b>Qualcomm</b>, shipped flight-control, maintenance, and testing software at
+          <b>Bell Flight</b>, built a LiDAR SLAM
           localization stack with the <b>UT Dallas NOVA team</b>, and architected prototyping, testing, and control solutions at <b>Texas Guadaloop</b>.</p>
-        <p>My happy place is closing the loop — sensors in, control out — whether that's a maglev yoke
-          holding a gap height, a robot localizing in a crowded atrium, or an mmWave radar finding a
-          person through a wall. I care about systems that are <b>fast, robust, and honest about their
-          limits.</b></p>
+        <p>What drives me is seeing my work come to life in realistic scenarios. I've done this through building closed-loop control systems on real hardware,
+          bringing up computer vision systems that function in practical spaces, and working on multiple sensor-fusion projects that solve real problems. I care about systems
+          that are <b>fast, robust, and honest about their limits.</b></p>
         <dl class="facts">
           <div><dt>Based in</dt><dd>Austin, Texas</dd></div>
           <div><dt>Focus</dt><dd>Embedded · Robotics · Controls</dd></div>
@@ -381,11 +379,9 @@
           <span class="d3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>3D</span>
         </div>
         <div class="meat">
-          <div class="top"><h3>Guadaloop Levitation Test Rig</h3></div>
-          <p class="sub">An electromagnetic maglev test rig I lead development on — yoke, coils, gap-height
-            sensors, and slide rails. Built the control stack from hand-tuned PID up toward a
-            reinforcement-learning pipeline for the HEMS system. Explore the assembly in an
-            Apple-style scroll-driven 3D walkthrough.</p>
+          <div class="top"><h3>Guadaloop Levitation Test Rig + Sim Env</h3></div>
+          <p class="sub">A magnetic levitation test rig I lead development on. Built the control stack from hand-tuned PID up toward a
+            FEA+PyBullet sim-based pipeline. Working to make levitation scalable.</p>
           <div class="tags"><span class="tag">Controls</span><span class="tag">Embedded</span><span class="tag">CAD / WebGL</span><span class="tag">Reinforcement Learning</span></div>
           <span class="go">Open the 3D walkthrough →</span>
         </div>
@@ -400,7 +396,7 @@
           <p class="sub">An mmWave + UWB system that locates victims through walls and renders them in a
             first responder's own AR frame. Won Analog Devices' Sensor Fusion track at Purdue's StarkHacks.</p>
           <div class="tags"><span class="tag">mmWave Radar</span><span class="tag">Sensor Fusion</span><span class="tag">Embedded</span></div>
-          <span class="go">Read case study →</span>
+          <span class="go">Open the 3D walkthrough →</span>
         </div>
       </a>
 
@@ -418,14 +414,15 @@
       </a>
 
       <!-- FEATURED: BlindMaster -->
-      <a class="card feat reveal" href="projects/blindmaster.html">
-        <div class="ph logo-ph"><img class="logo" src="assets/projects/blindmaster/icon.png" alt="BlindMaster app icon"/></div>
+      <a class="card feat reveal" href="viewers/blindmaster/index.html">
+        <div class="ph logo-ph"><img class="logo" src="assets/projects/blindmaster/icon.png" alt="BlindMaster app icon"/>
+          <span class="d3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>3D</span></div>
         <div class="meat">
           <div class="top"><h3>BlindMaster</h3></div>
           <p class="sub">Full-stack IoT smart blinds — ESP32-C6 firmware, an Express + Socket.IO backend, and
             a Flutter app, with BLE-only provisioning and end-to-end calibration. Solo.</p>
           <div class="tags"><span class="tag">ESP32-C6</span><span class="tag">Embedded</span><span class="tag">Full-stack</span></div>
-          <span class="go">Read case study →</span>
+          <span class="go">Open the 3D walkthrough →</span>
         </div>
       </a>
 
@@ -756,7 +753,7 @@
     { name:'SmartPT',            href:'viewers/smartpt/index.html', skills:['Embedded C / C++','BLE','Sensor Fusion','Kalman Filtering','Computer Vision','Machine Learning','Signal Processing'] },
     { name:'LiDAR SLAM',         href:'projects/lidar-slam.html',   skills:['ROS','C++','Python','LiDAR · Radar','Visual Odometry','Sensor Fusion'] },
     { name:'TweinStein',         href:'projects/tweinstein.html',   skills:['Embedded C / C++','GPIO · UART · USB','Memory & Power Mgmt','Control Systems','Motor Control','LiDAR · Radar','Machine Learning','Signal Processing'] },
-    { name:'BlindMaster',        href:'projects/blindmaster.html',  skills:['Embedded C / C++','BLE','Device Drivers','GPIO · UART · USB','Memory & Power Mgmt'] },
+    { name:'BlindMaster',        href:'viewers/blindmaster/index.html',  skills:['Embedded C / C++','BLE','Device Drivers','GPIO · UART · USB','Memory & Power Mgmt'] },
     { name:'Harmonium',          href:'projects/harmonium.html',    skills:['Computer Vision','Signal Processing','Python'] },
   ];
   const COURSES = [

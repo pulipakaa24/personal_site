@@ -188,12 +188,22 @@ export function makeVis(VG){
 // fine. So scale pan by aspect, capped at 1 — only ever REDUCING it for narrow viewports;
 // at PAN_FULL_ASPECT and wider it's untouched (desktop + landscape phones stay identical).
 const PAN_FULL_ASPECT = 1.6;
+// The base framing only fits the model in the VERTICAL FOV, so on a narrow/portrait
+// viewport (where the horizontal FOV is much smaller) a wide model spills off the sides.
+// PORTRAIT_FIT zooms the camera out to also fit the width: 0 = off (current behaviour, may
+// clip sides), 1 = fully fit the framed extent's width. It only kicks in for aspect < 1-ish
+// (portrait); landscape/desktop are untouched. Live-tune by eye with a `#pfit=` URL hash.
+let PORTRAIT_FIT = 0.8;
+{ const m = (location.hash || '').match(/pfit=([\d.]+)/); if (m) PORTRAIT_FIT = parseFloat(m[1]); }
 const _c = new THREE.Vector3(), _s = new THREE.Vector3(), _right = new THREE.Vector3();
 export function frameCamera(camera, box, viewKey, pan, fit, out){
   const v = VIEWS[viewKey] || VIEWS.iso;
   box.getCenter(_c); box.getSize(_s);
   const r = Math.max(_s.x, _s.y, _s.z, 1e-4) * 0.5;
-  const dist = (r / Math.tan((camera.fov * Math.PI/180)/2)) * (fit || 1.6);
+  const vHalf = (camera.fov * Math.PI/180) / 2;
+  const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);            // horizontal half-FOV (shrinks in portrait)
+  const fitScale = 1 + Math.max(0, Math.tan(vHalf)/Math.tan(hHalf) - 1) * PORTRAIT_FIT;  // ≥1, zooms OUT on narrow screens only
+  const dist = (r / Math.tan(vHalf)) * (fit || 1.6) * fitScale;
   out.up.copy(v.up);
   out.target.copy(_c);
   out.pos.copy(_c).addScaledVector(v.dir, dist);

@@ -11,7 +11,11 @@
 // appearance.json shape:
 //   { "palette":[{name,color,metalness,roughness,opacity?,emissive?}, ...],
 //     "parts": { "<mesh.name>": <paletteIndex> },
-//     "faces": [ { "name":"<mesh.name>", "app":<paletteIndex>, "tris":[i,...] } ] }
+//     "faces": [ { "name":"<mesh.name>", "app":<paletteIndex>, "tris":<TRIS> } ] }
+// where <TRIS> is EITHER a flat list of triangle indices `[i, ...]` (legacy)
+// OR a run-length-encoded list of inclusive index ranges `[[start,end], ...]`.
+// Export always emits the compact range form (see compactAppearance); the reader
+// transparently accepts both. expandTris() normalises either to a flat list.
 // ============================================================================
 import { THREE } from './engine.js';
 
@@ -93,14 +97,73 @@ function resolveMeshes(k, byKey, byName){
   return byName.get(k) || [];
 }
 
-// Group a flat faces[] list ({key|name, app, tris}) by target into
+// triangle count of a geometry (indexed or not).
+function triCountFromGeo(geo){ return (geo.index ? geo.index.count : geo.attributes.position.count) / 3; }
+
+// Normalise a tris field to a flat index list, accepting either the legacy flat
+// form `[i, ...]` or the run-length form `[[start,end], ...]` (inclusive ranges).
+function expandTris(tris){
+  if (!tris || !tris.length) return [];
+  if (!Array.isArray(tris[0])) return tris;            // legacy flat list
+  const out = [];
+  for (const [s, e] of tris) for (let t = s; t <= e; t++) out.push(t);
+  return out;
+}
+// Run-length encode a SORTED, de-duplicated index list into inclusive ranges.
+function encodeRuns(sorted){
+  const runs = [];
+  for (let i = 0; i < sorted.length; ){
+    let s = sorted[i], p = sorted[i++];
+    while (i < sorted.length && sorted[i] === p + 1) p = sorted[i++];
+    runs.push([s, p]);
+  }
+  return runs;
+}
+
+// Collapse a verbose appearance map into the minimal equivalent, losslessly:
+//   1. flatten overlapping/stale face layers per mesh (LATER wins per triangle,
+//      matching paintFacesMulti) so re-painted bodies don't pile up;
+//   2. drop face triangles whose final app == the mesh's base `part` (they render
+//      identically to the base, so they can fall through);
+//   3. promote a single app that covers a whole mesh to a `parts` entry (no tris);
+//   4. merge the survivors by app and run-length encode them.
+// `triCountOf(key)` returns a mesh's triangle count (for step 3) or null/undefined
+// when unavailable (step 3 is then skipped — still fully correct, just less terse).
+export function compactAppearance(json, triCountOf){
+  const parts = Object.assign({}, json.parts || {});
+  const byKey = new Map();
+  for (const fa of (json.faces || [])){
+    const k = fa.key != null ? fa.key : fa.name;
+    (byKey.get(k) || byKey.set(k, []).get(k)).push(fa);
+  }
+  const faces = [];
+  for (const [k, entries] of byKey){
+    const triApp = new Map();                                    // last write wins
+    for (const fa of entries) for (const t of expandTris(fa.tris)) triApp.set(t, fa.app);
+    const byApp = new Map();
+    for (const [t, app] of triApp) (byApp.get(app) || byApp.set(app, []).get(app)).push(t);
+    const tc = triCountOf ? triCountOf(k) : null;
+    if (byApp.size === 1 && tc != null){                         // whole-mesh single app -> part
+      const [app, tris] = [...byApp][0];
+      if (tris.length === tc){ parts[k] = app; continue; }
+    }
+    for (const [app, tris] of byApp){
+      if (app === parts[k]) continue;                            // identical to base part
+      tris.sort((a, b) => a - b);
+      faces.push({ key: k, app, tris: encodeRuns(tris) });
+    }
+  }
+  return { palette: json.palette, parts, faces };
+}
+
+// Group a faces[] list ({key|name, app, tris}) by target into
 // key -> [{tris, preset}, ...] so one rebuild handles all facets of a part.
 function groupFaces(faces, palette){
   const by = new Map();
   for (const fa of (faces || [])){
     const k = fa.key != null ? fa.key : fa.name;
     if (!by.has(k)) by.set(k, []);
-    by.get(k).push({ tris: fa.tris, preset: palette[fa.app] });
+    by.get(k).push({ tris: expandTris(fa.tris), preset: palette[fa.app] });
   }
   return by;
 }
@@ -113,7 +176,7 @@ function paintFacesMulti(mesh, assignments){
   if (!mesh.geometry || !mesh.geometry.attributes.position || !assignments.length) return;
   if (!mesh.userData._geoCloned){ mesh.geometry = mesh.geometry.clone(); mesh.userData._geoCloned = true; }
   const geo = mesh.geometry;
-  const triCount = (geo.index ? geo.index.count : geo.attributes.position.count) / 3;
+  const triCount = triCountFromGeo(geo);
   // slot 0 = the part's current (base / part-assigned) material; one slot per facet
   const base0 = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
   const mats = [base0];
@@ -142,7 +205,8 @@ export class AppearanceEditor {
     this.onAfter = cfg.onAfter || (()=>{});           // re-run resolve(progress) on exit
     this.palette = (cfg.initial && cfg.initial.palette) || cfg.palette || DEFAULT_PALETTE.map(p => ({...p}));
     this.parts = Object.assign({}, (cfg.initial && cfg.initial.parts) || {});  // name -> paletteIndex
-    this.faces = ((cfg.initial && cfg.initial.faces) || []).map(f => ({...f, tris:[...f.tris]}));
+    // normalise loaded faces to flat tris so the editor works in one form; export re-compacts.
+    this.faces = ((cfg.initial && cfg.initial.faces) || []).map(f => ({...f, tris: expandTris(f.tris)}));
     this.active = 0; this.mode = 'part'; this.selected = null;
     this.on = false;
     this.raycaster = new THREE.Raycaster(); this.pointer = new THREE.Vector2();
@@ -247,8 +311,9 @@ export class AppearanceEditor {
   }
 
   exportJSON(){
-    const json = { palette: this.palette, parts: this.parts, faces: this.faces };
-    const txt = JSON.stringify(json, null, 2);
+    const triCountOf = (k) => { const m = this.resolve(k)[0]; return m && m.geometry ? triCountFromGeo(m.geometry) : null; };
+    const json = compactAppearance({ palette: this.palette, parts: this.parts, faces: this.faces }, triCountOf);
+    const txt = JSON.stringify(json);
     navigator.clipboard?.writeText(txt).catch(()=>{});
     const dump = document.getElementById('dump'); if (dump){ document.getElementById('dumpText').value = txt; dump.style.display = 'block'; }
     return txt;

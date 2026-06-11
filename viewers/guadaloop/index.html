@@ -84,8 +84,8 @@ function semanticByName(o){
   if (/Tslot|TwinExtrusion|Slide_Yoke_Mount|Steel[ _]Bar|LinMount/i.test(n)) return 'chassis';
   return null;
 }
-const SECTION = { yoke:{kick:'Subsystem 01', title:'Levitation<br>Yoke'},
-                  sensors:{kick:'Subsystem 02', title:'DW-AD-509<br>Gap Sensors'},
+const SECTION = { yoke:{kick:'Subsystem 01', title:'U-Shaped<br>Steel-Core<br>Yokes'},
+                  sensors:{kick:'Subsystem 02', title:'DW-AD-509-M30<br>Inductive Sensors'},
                   rails:{kick:'Subsystem 03', title:'Slide-Rail<br>System'} };
 
 // ---------- grouping editor config ----------
@@ -159,27 +159,27 @@ async function start(){
   chapters = [
     { r:[0.00,0.07], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'hero'}, blurb:'', dims:null },
     { r:[0.07,0.17], box:'yoke', view:'iso',  pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
-      panel:side('yoke','Two C-cores wrapped with the levitation coils. The coils render translucent so the steel cores they drive stay readable.','Placeholder copy'), dims:null },
+      panel:side('yoke','Two U-shaped 1020 carbon steel cores wrapped with the copper coils at either end to modulate force.','Placeholder copy'), dims:null },
     { r:[0.17,0.26], box:'yoke', view:'front', pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
       panel:side('yoke','Head-on: the working air-gap faces of the cores. Dimensions are placeholders pending the real drawing.','Front elevation'), dims:'yokeFront' },
     { r:[0.26,0.34], box:'yoke', view:'top',  pan:0.5, vis:vis({yokecore:1, coil:TRANS}),
       panel:side('yoke','Top-down: core spacing and coil footprint. Placeholder dimensions.','Plan view'), dims:'yokeTop' },
     { r:[0.34,0.40], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, fade:LATE },
     { r:[0.40,0.48], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:1}),
-      panel:side('sensors','Eddy-current gap-height sensors mounted around the rig. Isometric overview.','Placeholder copy'), dims:null },
+      panel:side('sensors','Our team opted for inductive sensors due to their price point and performance at close proximity. We\'re guaranteed to have a steel track, so why not make the most of it?','Isometric View'), dims:null },
     { r:[0.48,0.56], box:'sensors', view:'iso', pan:0.5, vis:vis({sensormod:1, sensorholder:TRANS}),
-      panel:side('sensors','The printed holder pieces turn translucent so the sensor bodies and their aim are clear.','Exploded read'), dims:null },
+      panel:side('sensors','The sensors are held in place by robust plastic structures to encourage clean data.','Isometric X-Ray'), dims:null },
     { r:[0.56,0.64], box:'sensors', view:'top', pan:0.5, vis:vis({sensormod:1, sensorholder:TRANS}),
-      panel:side('sensors','Top-down sensor placement. Placeholder dimensions.','Plan view'), dims:'sensorTop' },
+      panel:side('sensors','The sensors are placed to offer attitude angle measurement in all directions.','Top-Down'), dims:'sensorTop' },
     { r:[0.64,0.70], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null, fade:LATE },
     { r:[0.70,0.78], box:'rails', view:'iso', pan:0.5, vis:vis({railbar:1, railslider:1, railholder:TRANS}),
-      panel:side('rails','The vertical rails and their carriages, with the track clamps shown translucent.','Stage 1 · rails & carriages'), dims:null },
+      panel:side('rails','A vertical rail system was used to stabilize along attitude axes for preliminary testing of z-only control.','Stage 1 · rails & carriages'), dims:null },
     { r:[0.78,0.85], box:'rails', view:'iso', pan:0.5, vis:vis({railbar:1, railslider:1, railholder:1, railtrack:TRANS}),
-      panel:side('rails','The clamps solidify and the track plate they carry fades in translucently.','Stage 2 · track'), dims:null },
+      panel:side('rails','Zero-tolerance "press-fit" style clamps grasp the track to eliminate uncontrolled movements.','Stage 2 · track mounting'), dims:null },
     { r:[0.85,0.91], box:'all', view:'iso', pan:0.35, vis:vis({ALL:1}),
-      panel:side('rails','Everything goes opaque and the rest of the assembly returns around the rail.','Stage 3 · assembled'), dims:null },
+      panel:side('rails','Together, the track, rails, and chassis allow us to rapidly prototype our control algorithms in a safe way.','Stage 3 · assembled'), dims:null },
     { r:[0.91,1.00], box:'all', view:'iso', pan:0, vis:vis({ALL:1}),
-      panel:side('rails','The chassis — carrying the yoke, sensors and its lower carriages — travels up the rails and back down on a smooth trapezoidal profile.','Stage 4 · travel'),
+      panel:side('rails','With sticking and bottom-out protection offered by the slide rails, we can ensure our algorithm is robust before moving to pitch and roll control','Stage 4 · movement'),
       dims:null, motion:{ amp:0.16 } },
   ];
 
