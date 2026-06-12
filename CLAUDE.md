@@ -594,6 +594,21 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-12** — **Landing page: skill popover closes on outside tap on mobile (iOS fix) + moved Skills right after
+  the bio.** (1) **Mobile dismiss bug:** the skill-chip popover (`.skillpane`) only closed on scroll on mobile — tapping
+  empty space did nothing. Root cause is the classic **iOS Safari quirk**: a `click` on a non-interactive area doesn't
+  bubble to `document`, so the `addEventListener('click', closePane)` outside-close never fired on touch. Fix: also
+  close on **`pointerdown`** (fires reliably for touches) — `addEventListener('pointerdown', closePane)` — and stop
+  `pointerdown` from bubbling on both the **pane** and each **chip** (the chip guard is essential: without it an
+  outside-`pointerdown`/same-chip tap would close-then-the-click-reopens, or the active class would be cleared before
+  the chip's `click` toggle reads it). Kept the `click`/Esc/resize/scroll closers. (2) **Reorder:** moved the entire
+  `<section id="skills">` to sit **right after `#about`** (the bio) — order is now about → skills → work → experience
+  → honors → coursework → contact — and renumbered the `.idx` labels: Skills **02 — Toolkit**, Work **03 — Selected
+  Work**, Experience **04**, Honors **05**, Coursework **06** (About 01 / Contact 07 unchanged). The popover JS is
+  unaffected (it queries `#skills .chip` live + positions via `getBoundingClientRect`). **Verified headless**
+  (`/private/tmp/skills_outside.cjs` touch emulation + `skills_desktop.cjs`): mobile chip-tap opens, outside-tap
+  closes, inside-tap stays open, same-chip toggle closes; desktop click-open/outside-close still work; section order +
+  renumbered idx confirmed; 0 console errors.
 - **2026-06-12** — **Landing page: mobile nav menu (hamburger → full-screen overlay).** On mobile the nav previously
   hid all links except the Résumé button (`@media(max-width:860px){.navlinks a:not(.btn){display:none}}`) — so there
   was no way to reach Work/Experience/About/Contact. Added a proper mobile menu: a **hamburger toggle** (`#menuToggle`,
