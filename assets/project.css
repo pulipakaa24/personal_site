@@ -88,6 +88,12 @@ nav.scrolled{ background:rgba(0,0,0,.6); backdrop-filter:blur(14px); border-bott
 .hero-media > video,
 .hero-media > iframe,
 .hero-media > canvas{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border:0; display:block}
+/* clickable hero-media (links to a live site/demo) */
+a.hero-media{display:block; cursor:pointer; transition:border-color .25s var(--ease), transform .25s var(--ease)}
+a.hero-media > img{transition:transform .5s var(--ease)}
+a.hero-media:hover{border-color:rgba(255,106,0,.55); transform:translateY(-2px)}
+a.hero-media:hover > img{transform:scale(1.04)}
+a.hero-media:hover .cap{border-color:rgba(255,106,0,.6); color:#fff}
 .hero-media .abstract{
   position:absolute; inset:0;
   background:
@@ -97,7 +103,14 @@ nav.scrolled{ background:rgba(0,0,0,.6); backdrop-filter:blur(14px); border-bott
   display:flex; align-items:center; justify-content:center;
 }
 .hero-media .abstract .mark{font-size:12px; letter-spacing:.3em; text-transform:uppercase; color:var(--faint); border:1px solid var(--line); padding:9px 16px; border-radius:999px}
-.hero-media .cap{position:absolute; left:14px; bottom:12px; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--faint)}
+.hero-media .cap{
+  position:absolute; left:12px; bottom:12px; max-width:calc(100% - 24px);
+  font-size:11px; letter-spacing:.14em; text-transform:uppercase; line-height:1.3;
+  color:rgba(255,255,255,.95);
+  background:rgba(10,11,14,.6); backdrop-filter:blur(8px) saturate(1.2);
+  -webkit-backdrop-filter:blur(8px) saturate(1.2);
+  border:1px solid rgba(255,255,255,.16); border-radius:8px; padding:6px 11px;
+}
 
 /* ---------- facts strip ---------- */
 .facts{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:56px 0}
@@ -124,8 +137,9 @@ code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.88e
 
 /* media gallery (images) */
 .gallery{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px}
-.gallery figure{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#0a0a0a; aspect-ratio:4/3; position:relative}
-.gallery figure img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.gallery figure{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#0a0a0a}
+.gallery figure img{width:100%; aspect-ratio:4/3; object-fit:cover; display:block}
+.gallery figcaption{padding:10px 14px; font-size:13px; color:var(--muted); border-top:1px solid var(--line); line-height:1.45}
 
 /* responsive video / embed (youtube, vimeo, iframe demos) */
 .videowrap{position:relative; border:1px solid var(--line); border-radius:14px; overflow:hidden; aspect-ratio:16/9; background:#0a0a0a}

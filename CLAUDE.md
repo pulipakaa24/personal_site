@@ -18,7 +18,7 @@
 > only have time for one doc update, update the Changelog + Roadmap. A stale context doc is worse
 > than none — it misleads the next agent.
 >
-> Last updated: **2026-06-11**.
+> Last updated: **2026-06-12**.
 
 ---
 
@@ -530,6 +530,14 @@ coursework, skills, contact/footer.
   single shared flag + a `body.dev` CSS class — don't re-introduce always-on HUD/hint or ungated G handlers
   in a viewer. (Note: a **hash-only** navigation doesn't reload the page, so the module won't re-read `#dev`
   — load the URL fresh / reload; this also bit the headless test until it forced a full load.)
+- **HDR / wide-gamut photos wash out in browsers.** iPhone photos are often **HDR JPEGs** (profile
+  `Display P3 Primaries; PQ (Adaptive Gain Curve …)`). macOS Preview/Photos render the gain map (vibrant);
+  browsers show the PQ/SDR base → **flat / washed-out**. Before adding a photo, check it:
+  `sips -g profile <img>`. If it's **PQ/HDR**, bake to sRGB SDR:
+  `sips --matchTo '/System/Library/ColorSync/Profiles/sRGB Profile.icc' in.jpeg --out out.jpeg` (ColorSync
+  tone-maps PQ→sRGB). Plain **`Display P3`** (wide-gamut **SDR**) is fine — browsers color-manage it; leave it.
+  Verify the result renders with proper contrast (the Read tool / a browser shot shows the SDR look). See §12
+  (2026-06-12). *(Hero captions use `.hero-media .cap` — a glass chip in `project.css`, legible over any image.)*
 - Respect explicit **pause points** ("pause when you finish this item").
 - **Deploy = Cloudflare Pages** (`aditya.pulipaka.com`, repo `pulipakaa24/personal_site`; a push auto-deploys).
   Cloudflare's default **Browser Cache TTL pins `.css`/`.js` for 4h with no revalidation** → edits don't show
@@ -564,6 +572,63 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-12** — **Harmonium hero: thumbnail of the live app + the hero box itself links to the live demo (dropped
+  the "Live demo" button).** The user wanted the `.hero-media` to be a clickable link to the live site
+  (`https://tvg-vibeathon.vercel.app`) showing a **site thumbnail**, and the redundant "Live demo ↗" `.btn` removed.
+  No harmonium image existed; the user supplied a screenshot of the app in use (playing piano via webcam hand-tracking
+  — far better than the plain gradient landing page I'd captured, since it shows what the project *does*). It was a
+  3 MB **`Display P3`** PNG (2428×1346); baked it to **sRGB JPEG** resized to 1400w (q82, **142 KB**) at
+  `assets/projects/harmonium/hero.jpeg` via `sips --matchTo … sRGB --resampleWidth 1400 -s format jpeg`. Markup: the
+  hero `<div class="hero-media reveal">` (was an `.abstract` placeholder) is now
+  `<a class="hero-media reveal" href=… target="_blank" rel="noopener" aria-label="Open the live Harmonium demo">` wrapping
+  the `<img>` + the existing `.cap` "Try it live ↗"; removed the `.btn-solid` "Live demo ↗" from `.actions` (now just
+  GitHub + Watch demo). **Shared CSS** (`project.css`): added a clickable-hero affordance — `a.hero-media{display:block;
+  cursor:pointer}` + hover (`translateY(-2px)`, accent border, inner `img` `scale(1.04)` ken-burns, `.cap` brightens).
+  (An `<a>` that's a direct grid item is auto-blockified, but set `display:block` explicitly.) Reusable for any future
+  project whose hero should link to a live site. **Verified headless**: hero is an `<a>`→the demo URL (new tab,
+  `cursor:pointer`), thumbnail loads 1400×776, no `.abstract`, actions = [GitHub, Watch demo], caption legible, no
+  console errors; screenshot confirms the crop keeps the face + central piano keys.
+- **2026-06-12** — **Fixed a washed-out hero image (HDR/PQ JPEG → sRGB) + made the hero-media `.cap` legible.**
+  The user replicated the tweinstein hero-media reveal on **lidar-slam** and the photo looked badly washed-out in
+  the browser vs Apple Preview, and asked "does it have HDR?". It does: `sips -g profile` on
+  `assets/projects/lidar-slam/1755029891520.jpeg` reported **`Display P3 Primaries; PQ (Adaptive Gain Curve …)`** —
+  an Apple **HDR** JPEG (PQ transfer + gain map). Preview is HDR/ColorSync-aware (renders the gain map → vibrant);
+  browsers show the PQ/SDR base and it reads flat/washed-out. **Fix:** baked it to plain **sRGB SDR** via
+  `sips --matchTo '/System/Library/ColorSync/Profiles/sRGB Profile.icc' …` (ColorSync tone-maps PQ→sRGB); confirmed
+  the result profile is `sRGB IEC61966-2.1` and visually A/B'd (orig flat vs converted = richer contrast/greens).
+  Replaced the repo file in place (102 KB→165 KB; original backed up at `/private/tmp/lidar_hero.orig.jpeg`). Scanned
+  ALL site images: only this one was HDR/PQ. Two others are **`Display P3`** (wide-gamut **SDR** — `smartpt/stagePic`,
+  `tweinstein/tw_team`); browsers color-manage those correctly, so left as-is. **Second part — caption legibility:**
+  the user noticed the tweinstein hero caption only now (it "blends right into the image"). The shared
+  `.hero-media .cap` was `position:absolute` over the photo with `color:var(--faint)` (rgba .32) and **no background**
+  → invisible on busy images. Restyled it in `assets/project.css` as a **defined glass chip**: brighter text
+  (rgba .95), `background:rgba(10,11,14,.6)` + `backdrop-filter:blur(8px) saturate(1.2)` (+ `-webkit-`), subtle
+  border, `border-radius:8px` (rounded-rect, not a pill, so long captions wrap cleanly to 2 lines), `padding:6px 11px`,
+  `max-width:calc(100% - 24px)`. One shared rule → every hero caption (tweinstein, lidar-slam, harmonium, archive)
+  now reads clearly. **Verified headless** (element screenshots): lidar-slam hero no longer washed out + caption chip
+  legible (wraps to 2 lines), tweinstein "RACE DAY · 1ST PLACE 🏆" chip legible, no console errors.
+- **2026-06-12** — **Guadaloop case study: added a small "The team" photo gallery + gave ALL `.gallery`s visible
+  captions.** The user supplied two non-critical 1920×1080 team photos (`assets/projects/guadaloop/1777311336462.jpeg`
+  = teammate Neha Ramachandran working on the test rig; `…168.jpeg` = the whole Texas Guadaloop team doing the hand
+  sign) and asked to place them tastefully without pulling focus from the technical content. Added a `section.block`
+  titled **"The team"** using the shared **`.gallery`** module (the same compact 2-up responsive grid
+  `tweinstein.html` uses — `repeat(auto-fit,minmax(220px,1fr))`, 4:3 `object-fit:cover`, stacks to 1 col on phones),
+  with `loading="lazy"`. Placed **after "Results & honest limits" and before "Videos"** so the technical narrative
+  leads and the human/team context sits low. **Then (follow-up): captions.** The user noted alt text isn't easily
+  visible and asked for a caption under all galleries describing what's going on — so I changed the shared
+  **`.gallery` CSS** (`assets/project.css`) to support a visible `figcaption`: dropped the old
+  `figure{aspect-ratio:4/3; position:relative}` + `img{position:absolute; inset:0}` (which had no room for a caption)
+  in favour of `img{width:100%; aspect-ratio:4/3; object-fit:cover}` (the box now sizes to the image) + a new
+  `.gallery figcaption{padding:10px 14px; font-size:13px; color:var(--muted); border-top:1px solid var(--line)}`
+  (matching the existing `.figure figcaption` treatment). Then added `<figcaption>`s to **both** galleries
+  (Guadaloop's two team photos + TweinStein's two race-day photos). Captionless galleries still render fine (just no
+  caption bar). No new module — one shared CSS change covers every current + future gallery. Verified headless
+  (puppeteer): section order Problem→Overview→Decisions→Results→**The team**→Videos, images load 1920×1080, captions
+  present + legible as a divider-topped muted bar under each photo on both pages, no console errors. *(Notes: `/tmp`
+  puppeteer was wiped — `package.json` gone — so `npm i puppeteer-core@23` in `/private/tmp` was needed again; and a
+  puppeteer gotcha: `screenshot({clip})` is **document-relative**, so to capture a scrolled element either set
+  `clip.y` to its document offset, or omit `clip` and screenshot the viewport after `scrollIntoView` — or
+  `elementHandle.screenshot()` for a tight crop.)*
 - **2026-06-11** — **Standardized the viewer case-study top area to match the non-viewer project pages (all 4
   viewers).** The user asked that the viewers' docked case studies replicate the layout the non-viewer pages
   (`projects/*.html`) already do better: **media shown as actual embedded video players** (not bare link buttons),

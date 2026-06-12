@@ -95,9 +95,10 @@
     <section class="block reveal">
       <h2>The brace</h2>
       <p>The hinged knee cuff splits into two shells that clamp the leg. Each shell carries its own
-        MPU-6050 IMU; an ESP32-S3 reads both over I²C at 100&nbsp;Hz and streams orientation to the app
-        over BLE. As the knee flexes, the hinge rotates the shells relative to each other — and the
-        angle between the two IMUs is exactly the joint angle the EKF needs.</p>
+        MPU-6050 IMU; a XIAO ESP32-C6 reads both over I²C at 100&nbsp;Hz and streams packetized orientation to the app
+        over BLE every 3 measurements. This doesn't cause an issue for our kalman filter implementation since it's not in 
+        real-time, but rather gets processed after-the-fact. As the knee flexes, the hinge rotates the shells relative to 
+        each other — and the angle between the two IMUs is exactly the joint angle the EKF needs.</p>
     </section>
 
     <section class="block reveal">
@@ -105,7 +106,7 @@
       <div class="dives">
         <div class="dive">
           <h3>Camera + IMU time-sync over BLE</h3>
-          <p>100&nbsp;Hz IMU reads on the ESP32 batch into 30&nbsp;Hz BLE notifications; a round-trip-time
+          <p>100&nbsp;Hz IMU reads on the XIAO batch into 33.3&nbsp;Hz BLE notifications (transmission every 3 measurements); a round-trip-time
             calibration (the app sends an ack, RTT/2 is added to each timestamp) aligns the IMU stream
             to the recorded video.</p>
         </div>
@@ -155,11 +156,15 @@
         <figcaption style="margin-top:8px; font-size:13px; color:rgba(255,255,255,.42)">Full walkthrough</figcaption>
       </figure>
     </section>
+
+    <div class="soon reveal">
+      This is a condensed case study. Want the TestFlight build or more details? <a href="mailto:adipu@utexas.edu">Reach out</a>.
+    </div>
   </div>
 
   <footer class="wrap">
     <a href="../../index.html#work">← All work</a>
-    <a href="../rescuevision/index.html">Next: RescueVision →</a>
+    <a href="../blindmaster/index.html">Next: BlindMaster →</a>
   </footer>
 </article>
 
@@ -575,7 +580,7 @@ function defineChapters(){
     { r:[0.00,0.07], box:'all', view:'iso', pan:0, fit:1.7, vis:vis({ALL:1}), panel:{mode:'hero'}, blurb:'', dims:null, act:'rest' },
 
     { r:[0.07,0.26], box:'all', view:'iso', pan:0.42, fit:1.6, vis:vis({ALL:1}),
-      panel:side('device','A hinged knee cuff. Two shells clamp the leg; each carries an MPU-6050 IMU wired to an ESP32-S3 that streams orientation over BLE at 100&nbsp;Hz.','Brace + 2 IMUs'), dims:null, act:'rest' },
+      panel:side('device','A hinged knee cuff. Two shells clamp the leg; each carries an MPU-6050 IMU wired to a XIAO ESP32-C6 that streams orientation over BLE in packets of 3 whenever 3 measurements are obtained at 100&nbsp;Hz, effectively making transmission rate ~33Hz.','Brace + 2 IMUs'), dims:null, act:'rest' },
 
     { r:[0.26,0.48], box:'swung', view:'iso', pan:0.34, fit:1.45, vis:vis({ALL:1}),
       panel:side('explode','The thigh (upper) shell swings open on the hinge — each shell keeps its own IMU fixed in place: one on the upper side, one on the lower (shin) side.','One IMU per shell'), dims:null, act:'twohalves' },

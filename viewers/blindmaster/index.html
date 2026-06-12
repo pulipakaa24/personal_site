@@ -208,12 +208,14 @@
         <li>A <code>taskdrivenpowersave</code> branch (deeper power management) will replace main; then it may be released, with the app on TestFlight and the hardware open-sourced.</li>
       </ul>
     </section>
-
+    <div class="soon reveal">
+      This is a condensed case study. Want more details? <a href="mailto:adipu@utexas.edu">Reach out</a>.
+    </div>
   </div>
 
   <footer class="wrap">
     <a href="../../index.html#work">← All work</a>
-    <a href="../rescuevision/index.html">Next: RescueVision →</a>
+    <a href="../../projects/tweinstein.html">Next: TweinStein →</a>
   </footer>
 </article>
 
@@ -374,13 +376,13 @@ function defineChapters(){
 
     // 01 · form factor — a couple of swung views, dimension call-outs
     { r:[0.06,0.15], box:'all', view:'iso', pan:0.42, vis:vis({ALL:1}),
-      panel:side('form','The whole hub is about 90&nbsp;×&nbsp;132&nbsp;×&nbsp;40&nbsp;mm — smaller than a phone. Everything (servo, drivetrain, battery and the ESP32-C6) lives in one palm-sized enclosure.','~90 × 132 × 40 mm'), dims:'size' },
+      panel:side('form','The whole hub is about 90&nbsp;×&nbsp;132&nbsp;×&nbsp;40&nbsp;mm. Everything (servo, drivetrain, battery and the ESP32-C6) lives in one palm-sized enclosure.','~90 × 132 × 40 mm'), dims:'size' },
     { r:[0.15,0.22], box:'all', view:'side', pan:0.42, vis:vis({ALL:1}),
-      panel:side('form','Slim enough to sit flush against a window frame, deep enough to fit a LiPo and the drivetrain behind the faceplate.','Slim profile'), dims:'size' },
+      panel:side('form','Sits flush against a window frame, while deep enough to fit a LiPo and the drivetrain behind the faceplate.','Slim profile'), dims:'size' },
 
     // 02 · mounting plate hinges
     { r:[0.22,0.32], box:'plate', view:'iso', pan:0.42, act:'mount', vis:vis({ALL:TRANS, plate:1, box:0.4}),
-      panel:side('mount','The back plate clips the hub to the blind’s headrail. Modeled here swinging about its mounting hinge.','Clips on'), dims:null },
+      panel:side('mount','The back plate attaches the hub to the blind’s headrail, and the entire top segment clips into the bottom for easy assembly.','Clips on'), dims:null },
 
     // 03 · drivetrain + position payoff (box translucent) — scroll-tied gears + slats
     { r:[0.32,0.50], box:'mech', view:'iso', pan:0.30, act:'drive',

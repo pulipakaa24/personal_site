@@ -26,20 +26,22 @@
       <div>
         <a class="back" href="../index.html#work">← Selected Work</a>
         <span class="eyebrow">Robotics · Autonomy · Localization</span>
-        <h1>LiDAR SLAM<br>& Localization</h1>
+        <h1>LiDAR SLAM &<br>Localization</h1>
         <p class="lede">A ROS2 package that does offline SLAM, real-time <b>map-based localization</b>, and
           incremental map addition from one stack — validated to <b>~5 cm</b> against GPS ground truth.</p>
         <div class="tags">
           <span class="tag">ROS2</span><span class="tag">C++ / PyBind</span><span class="tag">KISS-ICP</span><span class="tag">KISS-SLAM</span><span class="tag">Open3D</span><span class="tag">OpenCV ORB</span>
         </div>
         <div class="actions">
-          <a class="btn btn-solid" href="https://github.com/Nova-UTD/navigator/tree/apulipaka/lidar_slam_testing" target="_blank" rel="noopener">GitHub ↗</a>
+          <a class="btn" href="https://github.com/Nova-UTD/navigator/tree/apulipaka/lidar_slam_testing" target="_blank" rel="noopener">GitHub (ROS2 nodes) ↗</a>
+          <a class="btn" href="https://github.com/Nova-UTD/kiss-icp" target="_blank" rel="noopener">GitHub (KISS_ICP adaptation) ↗</a>
+          <a class="btn" href="https://github.com/Nova-UTD/kiss-slam" target="_blank" rel="noopener">GitHub (KISS_SLAM adaptation) ↗</a>
         </div>
         <div class="statusline"><span class="dot"></span> Shipped · 3 ROS2 nodes</div>
       </div>
       <div class="hero-media reveal">
-        <div class="abstract"><span class="mark">Point Cloud</span></div>
-        <span class="cap">Map / point-cloud capture coming</span>
+        <img src="../assets/projects/lidar-slam/1755029891520.jpeg" alt="Demo of localization accuracy" loading="lazy"/>
+        <span class="cap">Localization (Red) vs Ground-Truth (Green, always-north-facing, z:0)</span>
       </div>
     </div>
   </div>
@@ -108,19 +110,18 @@
     <h2>Results</h2>
     <ul>
       <li>Sub-5 cm localization accuracy vs simulated GPS ground truth on ROS2 bag tests.</li>
-      <li>Single-command mapping, real-time localization, and incremental additive mapping nodes.</li>
+      <li>Mapping from scratch (KISS_SLAM), localization from pre-existing map (KISS_ICP modified), adding to an existing map (KISS_SLAM modified) all shipped.</li>
     </ul>
   </section>
 
   <div class="soon reveal">
-    A deeper write-up — architecture diagram and node breakdown — is on the way.
-    <a href="mailto:adipu@utexas.edu">Reach out</a> for details.
+    This is a condensed overview. <a href="mailto:adipu@utexas.edu">Reach out</a> for details.
   </div>
 </div>
 
 <footer class="wrap">
   <span>© <span id="yr"></span> Aditya Pulipaka</span>
-  <a href="../index.html">← Back to home</a>
+  <a href="harmonium.html">← Next: Harmonium →</a>
 </footer>
 
 <script src="../assets/project.js"></script>
