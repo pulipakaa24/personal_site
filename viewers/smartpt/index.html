@@ -65,7 +65,7 @@
 <article id="case">
   <div class="wrap">
     <span class="award">1st Place · Healthcare Track · Nexhacks @ CMU</span>
-    <p class="lede">A physical-therapy app that turns a phone — plus an optional IMU brace — into a closed-loop joint-angle tracker, giving patients real-time form feedback and clinicians richer movement data than a self-reported scale.</p>
+    <p class="lede">A physical-therapy app that turns a phone — plus an optional IMU brace — into a closed-loop joint-angle tracker, giving clinicians richer movement data than a self-reported scale.</p>
 
     <dl class="facts reveal">
       <div><dt>Role</dt><dd>Sensor fusion · ESP32 firmware · BLE</dd></div>
@@ -76,11 +76,10 @@
 
     <section class="block reveal">
       <h2>Overview</h2>
-      <p>Doctors configure a patient's exercises; patients record themselves and get real-time form
-        feedback plus long-term recovery insights. 3D keypoints from RTMPose3D fuse with an optional
-        ESP32 IMU brace over BLE through an Extended Kalman Filter that weights each camera update by
-        detection confidence. Won the Healthcare track at Nexhacks @ CMU (1500+ participants) and went
-        live on TestFlight in Feb 2026.</p>
+      <p>Doctors configure a patient's exercises; patients record themselves and get long-term recovery insights.
+        3D keypoints from RTMPose3D fuse with an optional ESP32 IMU brace over BLE through an Extended Kalman Filter
+        that weights each camera update by detection confidence. Won the Healthcare track at Nexhacks @ CMU
+        (1500+ participants) and went live on TestFlight in Feb 2026.</p>
     </section>
 
     <section class="block reveal">
@@ -96,7 +95,7 @@
       <div class="dives">
         <div class="dive">
           <h3>Camera + IMU time-sync over BLE</h3>
-          <p>100&nbsp;Hz IMU reads on the ESP32 batch into 30&nbsp;Hz BLE notifies; a round-trip-time
+          <p>100&nbsp;Hz IMU reads on the ESP32 batch into 30&nbsp;Hz BLE notifications; a round-trip-time
             calibration (the app sends an ack, RTT/2 is added to each timestamp) aligns the IMU stream
             to the recorded video.</p>
         </div>
@@ -125,7 +124,7 @@
       <ul>
         <li><b>🏆 1st place</b> — Healthcare track, Nexhacks @ CMU (1500+ participants).</li>
         <li>In-session activity classification plus per-session and cross-session joint-angle progress.</li>
-        <li>Shipped to TestFlight (Feb 2026); development ongoing.</li>
+        <li>Currently requires hefty cloud compute for skeleton-tracking.</li>
       </ul>
     </section>
 
@@ -134,7 +133,6 @@
       <div class="actions">
         <a class="btn" href="https://youtu.be/TumBOi9pYTY" target="_blank" rel="noopener">▶ Hackathon demo</a>
         <a class="btn" href="https://youtu.be/243DQZQlmLI" target="_blank" rel="noopener">▶ Walkthrough</a>
-        <a class="btn" href="#" data-placeholder>TestFlight (beta) ↗</a>
       </div>
     </section>
   </div>
