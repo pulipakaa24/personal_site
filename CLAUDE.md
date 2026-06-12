@@ -564,6 +564,28 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-11** — **Standardized the viewer case-study top area to match the non-viewer project pages (all 4
+  viewers).** The user asked that the viewers' docked case studies replicate the layout the non-viewer pages
+  (`projects/*.html`) already do better: **media shown as actual embedded video players** (not bare link buttons),
+  and the **GitHub/external links in their own strip at the top**, right under the title section (above the facts) —
+  the section needs no explicit "Links" heading, it's inferred from its contents. Done in two passes (the first put
+  the links *after* facts — the user corrected: on the non-viewer pages `.actions` lives in the hero **above** the
+  facts). Final standardized top-of-case order, identical to `tweinstein.html` et al: **`.award` pill → `.lede` →
+  `.tags` (tech-stack chips) → `.actions` (links) → `dl.facts` → content**. Changes per viewer (`viewers/*/index.html`):
+  (1) **Tags chips** — added a `.tags reveal` row of `.tag` chips after the lede (5 each): RescueVision/SmartPT/
+  BlindMaster reuse the exact chips from their matching non-viewer page; **Guadaloop** (which has no non-viewer page)
+  got crafted ones from its stack (`Ansys FEA · SciKit-Learn · PyBullet · Gymnasium · PID·LQR·RL`). (2) **Links strip**
+  — added a `.actions reveal` strip on **every** viewer between tags and facts. *(I initially gave RescueVision none /
+  SmartPT placeholders; the **user then filled in the real links**: **RescueVision** + **SmartPT** = GitHub · DevPost ·
+  LinkedIn Post; **Guadaloop** + **BlindMaster** = GitHub.)* (3) **Videos embedded** — replaced each bottom
+  "Media"/"Media & artifacts" `.btn`-link section with a **"Videos"** section of real `.videowrap > iframe` YouTube
+  players + a `<figcaption>` per clip: RescueVision 3 (hackathon 1:39 / short 0:56 / IWR bring-up 1:02), Guadaloop 3
+  (walkthrough 8:22 / clean run 0:08 / early instability 0:42), SmartPT 2 (hackathon demo / walkthrough). BlindMaster
+  had only a GitHub link (no videos) so its "Media" section was removed entirely (the link now lives in the top
+  `.actions` strip). All chrome is the **shared `assets/project.css`** (`.tags/.tag/.actions/.btn/.videowrap` already
+  defined) — no new CSS. **Verified headless** (puppeteer): DOM order award→lede→tags(5)→actions→facts on all four,
+  iframe `src`s correct, and rendered screenshots confirm the links strip sits under the title and the video players
+  embed with thumbnails + captions.
 - **2026-06-11** — **Two inverted-flow UI tweaks: "Explore in 3D" pill moved INSIDE the floater card; mobile
   defaults to a MINIMISED model (no top gap).** (1) **Pill inside:** `#dockhint` now floats at the bottom *inside*
   the docked card (was a chip *below* it) — `viewer.css` `transform: translate(-50%,-100%)` (anchored by its own
