@@ -564,6 +564,44 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-11** — **Two inverted-flow UI tweaks: "Explore in 3D" pill moved INSIDE the floater card; mobile
+  defaults to a MINIMISED model (no top gap).** (1) **Pill inside:** `#dockhint` now floats at the bottom *inside*
+  the docked card (was a chip *below* it) — `viewer.css` `transform: translate(-50%,-100%)` (anchored by its own
+  bottom edge) + `applyDock` positions it at `top = R.top + R.h − 14`, centred on the card. (2) **Mobile minimised
+  default:** removed the `body article#case{padding-top:408px}` gap hack; instead the model now **starts minimised
+  (the "‹ 3D" edge tab)** on phones, so the case study fills the top cleanly (less clutter than a near-full-width
+  card). New helper `narrowVP() = () => matchMedia('(max-width:640px)').matches` in `engine.js`: the `DockController`
+  constructor sets `this.collapsed = narrowVP()`; the scroll auto-restore is now **desktop-only** (`&& !narrowVP()`)
+  so the model stays minimised the whole time it's docked over the case study (incl. after **"Back to case study"**,
+  which now sets `this.collapsed = narrowVP()` to re-minimise on phones rather than `expand()`). **Phone collapse =
+  hide-in-place-fade, not the desktop slide-off-right:** the desktop `#c.docked.collapsed{transform:translateX(100%+30px)}`
+  + `.38s` transition made the model "fly in from the corner" when you scrolled into the un-dock zone on a phone; so
+  `viewer.css` overrides it under `@media(max-width:640px)` to `#c.docked{transition:opacity .25s}` +
+  `#c.docked.collapsed{transform:none;opacity:0}` — the un-dock now reveals the model **fading + growing from the
+  card** (matching desktop's grow), not sliding in. **Verified** (`/private/tmp/twochk.cjs` + `invert.cjs`): desktop
+  pill fully inside the card (bottom-centre, `pillInsideCard:true`); all 4 viewers regression-clean (top docked,
+  floater-click → visualizer start within 2px, back-to-case, no console errors); mobile 390px = case study fills the
+  top with **no gap** + "‹ 3D" tab (award at y=127, casePadTop 15vh), and scrolling into the un-dock zone shows the
+  model **on-screen growing** (canvas left 12 — previously a buggy off-screen 412 from the slide animation).
+  *(The user separately reworded the Guadaloop lede, resolving the "rig above" copy nit — §15.)*
+- **2026-06-11** — **Fixed a subtle model-size "pop" at the start of the floater enlarging (inverted flow).** The
+  user noticed the model abruptly expands a little just as the floater begins to enlarge. **Root cause:**
+  `DockController.update()` framed the docked rotisserie at a hardcoded **`fit: 2.0`**, but the storyboard branch it
+  hands off to at `dockK = DOCK_SETTLE (0.8)` resolves the **intro** chapter (`fit` ~1.6; 1.7 on SmartPT) — and the
+  `spinKeep` hand-off only blended the *azimuth*, never the *distance* — so at exactly `dockK=0.8` the fit jumped
+  discontinuously (2.0→1.6 ≈ **25%**, ~18% SmartPT), i.e. the model popped bigger right as the canvas started growing.
+  This didn't happen pre-inversion because the dock was adjacent to the **settle** chapter, which was deliberately
+  `fit: 2.0` *to match the rotisserie*; the inversion put the **intro** chapter (fit 1.6/1.7) adjacent instead, breaking
+  that match. **Fix (shared, ~10 lines in the rotisserie branch):** resolve the storyboard's resting frame via
+  `onStory(this.shownProgress)` (the *same* frame the un-dock hands off to — also keeps the docked model in its intro
+  part-state), capture its camera offset (`_soff`), and **blend the camera offset story↔card-fit-2.0 by `spinKeep`**
+  (the same factor that already blends the spin), then apply the azimuth spin. So the framing distance is now
+  **continuous across `[0.8, 1.0]`** (intro fit at the `dockK=0.8` hand-off → fit-2.0 when fully docked), while the
+  card still settles at its composed fit-2.0 margins. Added one scratch vector `_soff`. No per-viewer edits.
+  **Verified** (`/private/tmp/popshot.cjs`): the dockK-0.81-vs-0.79 A/B (near-identical canvas size) that previously
+  showed a clear ~25% jump now shows the model at the **same size**; full-dock `dockK=0.99` still shows the small
+  fit-2.0 card. All four viewers regression-clean (`/private/tmp/invert.cjs`: top docked + "Explore in 3D ↓" hint,
+  floater-click → visualizer start within 2px, back-to-case → top, **no console errors**).
 - **2026-06-11** — **INVERTED the viewer flow on all four viewers: case study FIRST, 3D walkthrough AFTER.**
   The user asked to lead with the case study (styled like every other case-study page) with the 3D model as a
   **floater in the top-right** over it; then, scrolling to the bottom of the case study, the floater **enlarges**
@@ -1089,10 +1127,9 @@ Newest first. Append an entry whenever you ship something.
 - **RescueVision coordinate-axis out-signs** — which of `#cs1y / #cs1z / #cs2x / #cs2z` should be
   flipped? Defaults are best-guess; the firmware fixes the *magnitudes* (43.18/13.97/92.43, −10° tilt)
   but the visual arrow directions need the user's confirmation. Bake once confirmed.
-- **Guadaloop lede copy** — after the 2026-06-11 flow inversion the LevSim case study leads with the rig as a
-  top-right *floater* (the 3D walkthrough is now *below*, reached by scrolling), so the lede's "The rig **above**
-  is the hard part to control" reads wrong. Reword ("the rig here" / "the rig in the viewer") — left to the user's
-  voice. *(Only Guadaloop has this; the other three ledes don't reference the model's position.)*
+- ✅ **Guadaloop lede copy** — after the 2026-06-11 flow inversion the old lede said "The rig **above** is the hard
+  part to control" which no longer matched the layout (rig is the floater / walkthrough is below). **Resolved** — the
+  user reworded it to lead with "**LevSim** is the simulation environment I built…" (no positional reference).
 - **Floater size on mobile** — the docked card is near-full-width on phones (clamped to `innerWidth−40`). The
   inverted flow now handles it with `body article#case{padding-top:408px}` (hero-card → article), but a smaller
   mobile card is a possible future tweak if the full-width hero feels too dominant.

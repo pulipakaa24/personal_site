@@ -114,7 +114,7 @@ body.editing #skipcase { display: none; }
 /* "Explore in 3D ↓" hint chip — a soft-pulsing glass pill centred under the docked
    floater, inviting the click (the 3D walkthrough isn't shown until you click/scroll
    to it). Built + positioned by DockController; shown while the model is docked. */
-#dockhint { position: fixed; z-index: 7; transform: translateX(-50%); white-space: nowrap;
+#dockhint { position: fixed; z-index: 7; transform: translate(-50%, -100%); white-space: nowrap;
             display: inline-flex; align-items: center; gap: 7px;
             padding: 7px 14px; border-radius: 999px;
             background: rgba(12,13,17,.5);
@@ -217,10 +217,12 @@ body.editing #dockhint, body.editing #dockwin, body.editing #docktab { display: 
   #blurb { bottom: 11vh; left: 5vw; right: 5vw; max-width: none; font-size: 13.5px; }
   #dockhint { padding: 6px 11px; font-size: 10px; letter-spacing: .1em; }
   #skipcase { bottom: 50px; padding: 8px 13px; font-size: 10px; letter-spacing: .12em; }
-  /* The case study leads on mobile, where the 3D floater is nearly full-width — so start
-     its content BELOW the floater + "Explore in 3D" chip (a clean hero-card → article
-     layout) instead of behind it. Higher specificity than each viewer's inline #case. */
-  body article#case { padding-top: 408px; }
+  /* On phones the model starts MINIMISED (DockController, the edge tab), so the case study
+     fills the top normally — no reserved gap needed (the old padding-top hack is gone).
+     The minimised model hides IN PLACE with a quick fade (not the desktop slide-off-right),
+     so scrolling into the un-dock zone reveals it fading + growing from the card — no slide-in. */
+  #c.docked { transition: opacity .25s ease; }
+  #c.docked.collapsed { transform: none; opacity: 0; }
 }
 /* bigger tap targets for the docked-window controls on touch devices */
 @media (pointer: coarse){

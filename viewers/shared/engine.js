@@ -439,6 +439,9 @@ export class Storyboard {
 const DOCK_SPIN_SPEED = 0.2;   // rad/s steady spin once fully docked
 const DOCK_FULL = 0.999;       // dockK at/above which the model free-spins
 const DOCK_SETTLE = 0.8;       // ...blending back to the storyboard iso pose down to here
+// On phones the docked card is near-full-width, so default it to MINIMISED (the edge tab) and
+// keep it minimised while over the case study — less clutter than a card covering the content.
+const narrowVP = () => matchMedia('(max-width: 640px)').matches;
 const wrapPi = a => { a %= 2*Math.PI; if (a > Math.PI) a -= 2*Math.PI; if (a < -Math.PI) a += 2*Math.PI; return a; };
 
 export class DockController {
@@ -456,8 +459,8 @@ export class DockController {
     this.progress = 0; this.shownProgress = 0; this.dockK = 0;
     this._spin = 0; this._spinV = 0; this._lastT = performance.now();
     this._storyStart = 0; this._storySpan = 1; this._undockSpan = 1;
-    this._slot = makeSlot(); this._ctr = new THREE.Vector3(); this._off = new THREE.Vector3();
-    this.collapsed = false;
+    this._slot = makeSlot(); this._ctr = new THREE.Vector3(); this._off = new THREE.Vector3(); this._soff = new THREE.Vector3();
+    this.collapsed = narrowVP();   // phones start minimised (edge tab); desktop shows the card
 
     this._buildDockUI();
     this.layout();
@@ -542,7 +545,8 @@ export class DockController {
   enterVisualizer(){ this.expand(); scrollTo({ top: Math.round(this._storyStart + this._undockSpan + 2), behavior: 'smooth' }); }
 
   // "Back to case study": the case study is now at the TOP, so return to the top of the page.
-  backToCase(){ this.expand(); scrollTo({ top: 0, behavior: 'smooth' }); }
+  // Re-minimise on phones (back to the edge tab) so the case study stays uncluttered.
+  backToCase(){ this.collapsed = narrowVP(); scrollTo({ top: 0, behavior: 'smooth' }); }
 
   // lerp the fixed canvas from fullscreen to the top-right card; resize renderer to match
   applyDock(k){
@@ -552,7 +556,9 @@ export class DockController {
     const top = lerp(0, R.top, ke), right = lerp(0, R.right, ke);
     const cv = this.canvas;
     const dh = document.getElementById('dockhint');
-    if (dh){ dh.style.top = (R.top + R.h + 12) + 'px';
+    // float the "Explore in 3D" pill INSIDE the card (bottom-centre, inset 14px from the
+    // bottom edge — the chip is anchored by its own bottom via translate(-50%,-100%)).
+    if (dh){ dh.style.top = (R.top + R.h - 14) + 'px';
              dh.style.left = (innerWidth - R.right - R.w/2) + 'px'; dh.style.right = 'auto'; }
     cv.style.width = w+'px'; cv.style.height = h+'px';
     cv.style.top = top+'px'; cv.style.right = right+'px'; cv.style.left = 'auto';
@@ -577,8 +583,9 @@ export class DockController {
   // docked rotisserie, then fade the storyboard overlays out as the model docks.
   update(){
     const now = performance.now(), dt = Math.min(0.05, (now - this._lastT)/1000); this._lastT = now;
-    // scrolling back up toward the storyboard auto-restores a collapsed window
-    if (this.collapsed && this.dockK < DOCK_FULL) this.collapsed = false;
+    // (desktop) scrolling toward the 3D auto-restores a manually-minimised window; on phones
+    // the model stays minimised (the edge tab) the whole time it's docked over the case study.
+    if (this.collapsed && this.dockK < DOCK_FULL && !narrowVP()) this.collapsed = false;
     this.shownProgress += (this.progress - this.shownProgress) * 0.12;
     this.applyDock(this.dockK);
     if (this.dockK < DOCK_SETTLE){
@@ -591,13 +598,26 @@ export class DockController {
         this._spin += this._spinV * dt;
       }
       const cam = this.camera, b = this.getBox(); b.getCenter(this._ctr);
+      // The model's resting frame is the storyboard's progress-0 (intro) framing — the SAME
+      // frame the un-dock hands off to at dockK=DOCK_SETTLE. Resolve it (this also sets the
+      // model's intro part-state for the card) and capture its camera offset...
+      this.onStory(this.shownProgress);
+      this._soff.copy(cam.position).sub(this._ctr);
+      // ...plus the fully-docked card framing (deliberately fit 2.0 for nice card margins).
       frameCamera(cam, b, 'iso', 0, 2.0, this._slot);
       this._off.copy(this._slot.pos).sub(this._slot.target);
-      const r = Math.hypot(this._off.x, this._off.z);
-      const ang0 = Math.atan2(this._off.z, this._off.x);         // azimuth of the settled iso view
+      // spinKeep: 1 fully docked → 0 at the hand-off (dockK=DOCK_SETTLE). Blend BOTH the camera
+      // distance (story↔card offset) AND the azimuth spin by it, so the framing is CONTINUOUS
+      // across DOCK_SETTLE (no fit pop — the bug was the card's fixed fit 2.0 vs the intro's
+      // ~1.6) while the card still settles at its composed fit-2.0 look when fully docked.
       const spinKeep = smoothstep(clamp01((this.dockK - DOCK_SETTLE) / (DOCK_FULL - DOCK_SETTLE)));
+      const ox = lerp(this._soff.x, this._off.x, spinKeep);
+      const oy = lerp(this._soff.y, this._off.y, spinKeep);
+      const oz = lerp(this._soff.z, this._off.z, spinKeep);
+      const r = Math.hypot(ox, oz);
+      const ang0 = Math.atan2(oz, ox);                           // azimuth of the blended iso view
       const ang = ang0 + wrapPi(this._spin) * spinKeep;          // shortest-path return to iso
-      cam.position.set(this._ctr.x + r*Math.cos(ang), this._slot.pos.y, this._ctr.z + r*Math.sin(ang));
+      cam.position.set(this._ctr.x + r*Math.cos(ang), this._ctr.y + oy, this._ctr.z + r*Math.sin(ang));
       cam.up.set(0,1,0); cam.lookAt(this._ctr);
     }
     const od = 1 - smoothstep(this.dockK);
