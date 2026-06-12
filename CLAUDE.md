@@ -152,8 +152,14 @@ whole dock-to-case-study shell; you no longer hand-roll `applyDock`/scroll-mappi
 - **`centerModel, setOpacity` (depthWrite-on, avoids X-ray), `makeVis(VG)`, `frameCamera`, `projectPoint`.**
 - **`Storyboard`** — the data-driven scroll engine. You give it `chapters[]`; it resolves the current
   scroll progress to a camera framing + opacities + overlays each frame.
-- **`DockController`** — the shared **dock-to-case-study shell** (extracted 2026-06-10; was duplicated in
-  both viewers). Owns: the scroll→`progress`/`dockK` mapping + `layout()`; the canvas dock lerp
+- **`DockController`** — the shared dock shell. **⚠️ The flow is INVERTED as of 2026-06-11: case study FIRST,
+  3D walkthrough AFTER (see §12).** `dockK=1` is now the TOP of the page (the model is docked in its corner card
+  over the case study); it ramps to 0 across a short un-dock zone (`_undockSpan = min(0.9·innerHeight, 0.5·storySpan)`)
+  at the start of the `#spacer`, where the floater grows back to full screen, and `progress` maps the storyboard
+  after that. `layout()` derives `_storyStart = spacer.offsetTop` / `_storySpan` / `_undockSpan`; `_onScroll()` does
+  `dockK = clamp01(1 − (scrollY − _storyStart)/_undockSpan)` and `progress = clamp01((x − _undockSpan)/(_storySpan −
+  _undockSpan))`. (Originally a storyboard-first "dock-to-case-study" shell; extracted 2026-06-10, was duplicated in
+  both viewers.) Owns: the scroll→`progress`/`dockK` mapping + `layout()`; the canvas dock lerp
   (`applyDock`); the storyboard-overlay fade; the `#case .reveal` IntersectionObserver; and the **docked
   rotisserie with the smooth two-way hand-off** (the `ang0 + wrapPi(spin)*spinKeep` orbit — see §7).
   Construct in `start()` with `{ canvas, renderer, camera, spacer, getBox:()=>boxes.all,
@@ -168,17 +174,19 @@ whole dock-to-case-study shell; you no longer hand-roll `applyDock`/scroll-mappi
   study docks immediately** instead of rendering the full-screen storyboard "active" behind `#case` until the
   first scroll input (a long-standing latent bug — any scroll input *was* necessary & sufficient to settle it).
   It also owns the **docked-window controls** (built in JS by `_buildDockUI()`, no per-viewer HTML, shown only
-  when `dockK ≥ 0.985`): `#dockwin` (transparent click-catcher over the card → `replay()` smooth-scrolls back
-  up to the last storyboard beat full-screen), `#dockmin` ("›" minimise → `collapse()` slides the card off the
-  right edge via `#c.docked.collapsed`), and `#docktab` ("‹ 3D" edge tab → `expand()`). `update()` auto-clears
-  `collapsed` when `dockK < DOCK_FULL` (scrolling back toward the 3D). Minimise (corner button) and replay
-  (body click) are intentionally separate gestures. `_cardRect()` is the single source for the card's resting
-  rect (shared by `applyDock` + the controls). `_buildDockUI()` also builds **`#skipcase` ("Skip to case study
-  ↓")** — a user-facing (NOT dev-gated) glass chip shown during the walkthrough (`applyDock` hides it once
-  `dockK > 0.03`, same trigger as `#scrollhint`/`#hint`); **`skipToCase()`** smooth-scrolls straight to the top
-  of `#case` (where `dockK` reaches 1 → the model is docked in its corner card and the case heading is at the
-  viewport top), falling back to the dock-complete scroll position if a viewer has no `#case`. One method on the
-  shared controller → all four viewers get it for free.
+  when `dockK ≥ 0.985`): `#dockwin` (transparent click-catcher over the card → `enterVisualizer()` smooth-scrolls
+  **DOWN** to the visualizer storyboard start `_storyStart+_undockSpan`; the smooth-scroll passes through the un-dock
+  zone so the floater grows + the title fades in on the way), `#dockmin` ("›" minimise → `collapse()` slides the card
+  off the right edge via `#c.docked.collapsed`), and `#docktab` ("‹ 3D" edge tab → `expand()`). `update()` auto-clears
+  `collapsed` when `dockK < DOCK_FULL`. Minimise (corner button) and enter-visualizer (body click) are intentionally
+  separate gestures. `_cardRect()` is the single source for the card's resting rect (shared by `applyDock` + the
+  controls). `_buildDockUI()` also builds **`#skipcase` ("↑ Back to case study")** — a user-facing (NOT dev-gated)
+  glass chip shown during the walkthrough (`applyDock` hides it once `dockK > 0.03`, same trigger as
+  `#scrollhint`/`#hint`); **`backToCase()`** smooth-scrolls to the top of the page (the case study is now first). It
+  also sets the **`#dockhint`** copy to **"Explore in 3D ↓"** — the soft-pulsing glass chip (`viewer.css`
+  `@keyframes explorePulse` glow + `hintbob` arrow bob, centred under the card by `applyDock`, shown when `dockK>0.7`)
+  that invites the click since the walkthrough isn't shown up front. One set of controls on the shared controller →
+  all four viewers get them for free.
 
 ### The `Storyboard` chapter model
 Each chapter is an object:
@@ -379,6 +387,12 @@ rings) emanate from the Qorvo module; a phone→UWB ranging line resolves **dash
 "locks" (indicator dot **orange → green**). The phone is **draggable on the XZ plane** during the finale.
 
 ### Dock-to-case-study
+> **⚠️ Flow inverted 2026-06-11 (§12):** the case study is now FIRST with the model docked over it; the
+> storyboard plays AFTER (the floater enlarges when you scroll to the bottom of the case study). The mechanics
+> below (the dock lerp, the opaque card, the two-way rotation hand-off) are all unchanged — only the scroll
+> direction that drives `dockK` was inverted in the shared `DockController`. Read "after the storyboard" below as
+> "before the storyboard / while reading the case study."
+
 After the storyboard, scroll keeps going: the fixed canvas **lerps to a top-right card** (`#c.docked`,
 responsive size), storyboard overlays fade out, the docked model auto-rotates, and a normal-flow
 `<article id="case">` (the RescueVision write-up) scrolls in below. `dockK` from
@@ -550,6 +564,46 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-11** — **INVERTED the viewer flow on all four viewers: case study FIRST, 3D walkthrough AFTER.**
+  The user asked to lead with the case study (styled like every other case-study page) with the 3D model as a
+  **floater in the top-right** over it; then, scrolling to the bottom of the case study, the floater **enlarges**
+  (reusing the existing rotation ramp to settle from the carousel pose back to iso), the **hero title fades in**
+  once it's full-screen, and the storyboard plays "as usual." Implemented as an **inversion of the existing dock
+  machinery** (not a rebuild) — almost everything was reused. Changes: **(1) DockController scroll math inverted**
+  (`engine.js`): `layout()` now computes `_storyStart = spacer.offsetTop`, `_storySpan = spacer.offsetHeight −
+  innerHeight`, and a short `_undockSpan = min(0.9·innerHeight, 0.5·storySpan)`; `_onScroll()` sets
+  `dockK = clamp01(1 − (scrollY − _storyStart)/_undockSpan)` (1 while reading the case study, ramping 1→0 across the
+  un-dock zone at the spacer's start) and `progress = clamp01((x − _undockSpan)/(_storySpan − _undockSpan))` (the
+  storyboard runs AFTER the un-dock zone). The `update()` rotisserie + overlay-fade (`od = 1 − smoothstep(dockK)`)
+  and the `spinKeep/wrapPi` two-way rotation hand-off were left as-is — they already do the enlarge + rotation ramp,
+  just at the new scroll positions. **(2) DOM reorder** — `<article id="case">` now comes **BEFORE** `#spacer` in all
+  four `index.html` (the canvas/overlays are `position:fixed`, so only these two flow elements moved). **(3) Dock UI
+  repurposed**: `replay()`→**`enterVisualizer()`** (clicking the floater `#dockwin` smooth-scrolls DOWN to
+  `_storyStart + _undockSpan` = the visualizer start; the smooth-scroll passes through the un-dock zone so the model
+  grows + title fades in on the way); `skipToCase()`→**`backToCase()`** (smooth-scroll to top); `#skipcase` relabeled
+  **"↑ Back to case study"** (its existing `disp('skipcase', k>0.03)` trigger already shows it during the walkthrough
+  / hides it while docked — perfect for the inverted flow); `#dockhint` repurposed as the **"Explore in 3D ↓"** hint
+  chip (text set in `_buildDockUI`; restyled in `viewer.css` as a soft-pulsing glass pill — `@keyframes explorePulse`
+  glow + `hintbob` arrow bob — centred under the card by `applyDock`, shown when `dockK>0.7`). **(4) Hero title
+  fade-in** (`Storyboard`): added `hero.fadeIn` (default **0.03**); `updateOverlays` now sets title
+  `opacity = smoothstep(p/fadeIn)` and holds it still (`translateY 0`) through the fade, THEN rises — so the title
+  appears strictly AFTER the floater reaches full screen (progress only advances past 0 once dockK=0). **(5) Dock on
+  load**: the constructor now calls `applyDock(this.dockK)` so the model is already in its corner card on load (no
+  full-screen flash while reading the case study). **(6) Mobile** (`viewer.css`): the floater is near-full-width on
+  phones, so a shared `body article#case { padding-top: 408px }` (`@media max-width:640px`, higher specificity than
+  each viewer's inline `#case`) starts the case content BELOW the floater + chip → a clean **hero-card → article**
+  layout (was: lede hidden behind the card). **BlindMaster's finale fade needed NO change** — it's keyed to
+  `dock.progress` (raw scroll), not a bottom dock (which no longer exists; the visualizer is now the finale and just
+  ends full-screen). **Verified headless across all four** (`/private/tmp/invert.cjs`): DOM order (`spacerAfterCase`),
+  top = docked 380×280 card top-right + "Explore in 3D ↓" hint @ opacity 1 + "Back to case study" hidden + title @ 0
+  + case at top; un-dock midpoint = canvas growing (890×640); intro = full-screen + "Back to case study" visible +
+  title fading in (0.01→0.24→0.86 across the fade window); **floater-click → visualizer start** (within 2px of
+  `_storyStart+_undockSpan` on every viewer); **back-to-case → 0**; no console errors anywhere. Mobile 390px confirmed
+  (`/private/tmp/mobtop.cjs`): hero-card → article, lede no longer occluded. *(Harness gotcha: the site sets
+  `html{scroll-behavior:smooth}` (project.css), so the test must inject `html{scroll-behavior:auto}` or instant
+  `scrollTo` reads mid-animation.)* **Open copy nit (see §15):** Guadaloop's lede still says "The rig **above** is the
+  hard part to control" — with the inverted layout the rig is the top-right floater / the walkthrough is *below*, not
+  above, so that word now reads wrong; left for the user to reword (their voice).
 - **2026-06-11** — **Shared "Skip to case study" control on every 3D walkthrough.** The user asked for a skip
   option on all viewers that "scrolls directly to case study start (dock start)". Built once in the shared
   **`DockController`** so all four viewers inherit it: `_buildDockUI()` now also creates **`#skipcase`** ("Skip
@@ -987,6 +1041,13 @@ Newest first. Append an entry whenever you ship something.
   was the interactive full-screen fixed canvas eating the touch-scroll gesture on iOS WebKit; fixed with
   canvas `pointer-events:none` on touch devices, plus a coarse-pointer render budget and a
   `@media(max-width:640px)` viewer layout. iPhone/iOS-sim/real-WebKit verification loops documented in §6.)*
+- ✅ **Invert the viewer flow on all four viewers: case study FIRST (styled like the other case-study pages,
+  with the 3D model as a top-right floater), then scrolling to the bottom enlarges the floater (rotation ramps
+  from the carousel pose to iso), the title fades in once full-screen, then the 3D walkthrough.** Plus: the
+  bottom button now says **"Back to case study"** (→ top of page) instead of "Skip to case study"; clicking the
+  floater jumps to the visualizer start; and a soft-pulsing **"Explore in 3D ↓"** hint chip under the floater
+  (since the walkthrough isn't shown up front). *(Done 2026-06-11 — an inversion of the existing dock machinery;
+  see §12 + §5. Verified headless desktop + mobile, all four. Open: Guadaloop's "rig above" lede copy, §15.)*
 - 🔄 **Confirm the coordinate-axis out-sign combo** (`#cs1y/#cs1z/#cs2x/#cs2z`) so it can be baked as
   default and the hash dropped. *(Awaiting the user's eyes on the clearer second view.)*
 - 🔄 Build the **BlindMaster** viewer (`servobox.glb`). *(Design locked + foundation built & verified
@@ -1028,6 +1089,13 @@ Newest first. Append an entry whenever you ship something.
 - **RescueVision coordinate-axis out-signs** — which of `#cs1y / #cs1z / #cs2x / #cs2z` should be
   flipped? Defaults are best-guess; the firmware fixes the *magnitudes* (43.18/13.97/92.43, −10° tilt)
   but the visual arrow directions need the user's confirmation. Bake once confirmed.
+- **Guadaloop lede copy** — after the 2026-06-11 flow inversion the LevSim case study leads with the rig as a
+  top-right *floater* (the 3D walkthrough is now *below*, reached by scrolling), so the lede's "The rig **above**
+  is the hard part to control" reads wrong. Reword ("the rig here" / "the rig in the viewer") — left to the user's
+  voice. *(Only Guadaloop has this; the other three ledes don't reference the model's position.)*
+- **Floater size on mobile** — the docked card is near-full-width on phones (clamped to `innerWidth−40`). The
+  inverted flow now handles it with `body article#case{padding-top:408px}` (hero-card → article), but a smaller
+  mobile card is a possible future tweak if the full-width hero feels too dominant.
 - **BlindMaster thumbnail** — currently the inverted Flutter blinds icon (weak); maybe swap for an app
   screenshot or a `servobox` render.
 - Confirm which PDF in `assets/` is the real résumé.

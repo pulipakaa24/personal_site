@@ -300,7 +300,7 @@ export class Storyboard {
     this.meshes = cfg.meshes || [];
     this.els = cfg.els || {};
     this.sections = cfg.sections || {};
-    this.hero = Object.assign({ travelVH: 80, introEnd: (this.chapters[0]?.r[1] ?? 0.07) }, cfg.hero || {});
+    this.hero = Object.assign({ travelVH: 80, introEnd: (this.chapters[0]?.r[1] ?? 0.07), fadeIn: 0.03 }, cfg.hero || {});
     this.hooks = cfg.hooks || {};
     this.camTarget = new THREE.Vector3();
     this.A = makeSlot(); this.B = makeSlot();
@@ -333,11 +333,14 @@ export class Storyboard {
 
   updateOverlays(p, i, c, localT){
     const { title, panel, blurb, dims } = this.els;
-    // hero title scrolls straight up out of frame (no fade) during the intro
+    // The case study comes FIRST now, so the hero title FADES IN once the floater has
+    // grown back to full screen (p just past 0, after the un-dock zone) — it holds still
+    // while it arrives, then scrolls up and out of frame as the storyboard proceeds.
     if (title){
-      const heroExit = clamp01(p / this.hero.introEnd);
-      title.style.transform = `translateY(${(-heroExit * this.hero.travelVH).toFixed(2)}vh)`;
-      title.style.opacity = '1';
+      const fIn = this.hero.fadeIn;
+      title.style.opacity = smoothstep(clamp01(p / fIn)).toFixed(3);
+      const rise = clamp01((p - fIn) / Math.max(1e-4, this.hero.introEnd - fIn));
+      title.style.transform = `translateY(${(-rise * this.hero.travelVH).toFixed(2)}vh)`;
     }
     // side panel: swap text while invisible, then fade in
     if (panel){
@@ -401,16 +404,22 @@ export class Storyboard {
 }
 
 // ============================================================================
-// DockController: the shared "dock-to-case-study" scroll shell.
+// DockController: the shared "case-study → 3D walkthrough" scroll shell.
 //
-// After the storyboard, the fixed canvas lerps into a top-right card and a normal
-// <article id="case"> scrolls in below it. This owns: the scroll -> progress/dockK
-// mapping, the canvas dock lerp (applyDock), the storyboard-overlay fade, and the
-// docked rotisserie camera with a SMOOTH TWO-WAY hand-off to/from the storyboard's
-// settled iso framing. It also wires the #case .reveal IntersectionObserver.
+// The case study comes FIRST (a normal <article id="case"> in flow) with the 3D model
+// docked into a top-right card floating over it. Scroll to the bottom of the case study
+// and the floater GROWS back to full screen (a dedicated "un-dock" zone at the start of
+// the #spacer), then the storyboard plays as usual. So the page reads: case study → the
+// floater enlarges (rotation ramps from the carousel pose back to iso) → hero title fades
+// in → 3D walkthrough. Clicking the floater (#dockwin) jumps straight to the walkthrough
+// start; "Back to case study" (#skipcase) returns to the top.
 //
-// Conventions it relies on (shared by every docking viewer): a #spacer that sizes
-// the storyboard scroll; the canvas (#c); overlay ids #title/#panel/#blurb/#dims;
+// This owns: the scroll -> progress/dockK mapping, the canvas dock lerp (applyDock), the
+// storyboard-overlay fade, the docked rotisserie camera with a SMOOTH TWO-WAY hand-off
+// to/from the storyboard's settled iso framing, and the #case .reveal IntersectionObserver.
+//
+// Conventions it relies on (shared by every docking viewer): a #spacer (AFTER #case) that
+// sizes the storyboard scroll; the canvas (#c); overlay ids #title/#panel/#blurb/#dims;
 // #scrollhint/#hint/#hud-progress; an optional #dockhint; and #case .reveal blocks.
 // Per-viewer specifics arrive as hooks:
 //   getBox()            -> Box3 to frame the docked model (e.g. boxes.all)
@@ -446,29 +455,41 @@ export class DockController {
 
     this.progress = 0; this.shownProgress = 0; this.dockK = 0;
     this._spin = 0; this._spinV = 0; this._lastT = performance.now();
-    this._storyEnd = 1;
+    this._storyStart = 0; this._storySpan = 1; this._undockSpan = 1;
     this._slot = makeSlot(); this._ctr = new THREE.Vector3(); this._off = new THREE.Vector3();
     this.collapsed = false;
 
     this._buildDockUI();
     this.layout();
-    // Initialise dockK/progress from the CURRENT scroll position. Otherwise dockK is only
-    // ever set by the scroll listener, so a reload (or back-nav) while scrolled into the
-    // case study leaves dockK=0 → the full-screen storyboard renders "active" behind #case
-    // until the user nudges the scroll. Snap shownProgress too so there's no fast-forward sweep.
+    // Initialise dockK/progress from the CURRENT scroll position, then dock the canvas
+    // immediately — on load the case study is at the top so the model should already be
+    // in its corner card (no full-screen flash). This also handles a reload/back-nav while
+    // scrolled into the storyboard. Snap shownProgress so there's no fast-forward sweep.
     this._onScroll();
     this.shownProgress = this.progress;
+    this.applyDock(this.dockK);
     addEventListener('resize', () => this.layout());
     addEventListener('scroll', () => this._onScroll(), { passive:true });
     this.observeReveals();
   }
 
-  layout(){ this._storyEnd = Math.max(1, this.spacer.offsetHeight - innerHeight); this._layoutDockUI(); }
+  layout(){
+    // The case study is FIRST (normal flow); the #spacer that sizes the storyboard comes
+    // AFTER it. The storyboard region therefore starts at the spacer's top, with a short
+    // "un-dock" zone at the spacer's start where the floater grows back to full screen.
+    this._storyStart = this.spacer.offsetTop;
+    this._storySpan  = Math.max(1, this.spacer.offsetHeight - innerHeight);
+    this._undockSpan = Math.min(innerHeight * 0.9, this._storySpan * 0.5);
+    this._layoutDockUI();
+  }
 
   _onScroll(){
-    this.progress = clamp01(scrollY / this._storyEnd);
-    const start = this._storyEnd - innerHeight*0.45, span = innerHeight*0.7;   // dock begins just before the article, completes shortly after
-    this.dockK = clamp01((scrollY - start) / span);
+    const x = scrollY - this._storyStart;
+    // dockK = 1 while reading the case study (x<0); ramps 1→0 across the un-dock zone at
+    // the spacer's start, growing the floater from the corner card to full screen.
+    this.dockK = clamp01(1 - x / this._undockSpan);
+    // progress = the storyboard, mapped AFTER the un-dock zone.
+    this.progress = clamp01((x - this._undockSpan) / Math.max(1, this._storySpan - this._undockSpan));
   }
 
   // the docked card's resting rect (top-right corner) — shared by applyDock + the controls
@@ -479,26 +500,29 @@ export class DockController {
   }
 
   // Build the docked-model controls once: a transparent click-catcher over the card
-  // (click = replay the storyboard from the top), its minimise button, and the collapsed
-  // edge tab that restores it. Created here so every docking viewer inherits them.
+  // (click = jump to the 3D walkthrough), its minimise button, the collapsed edge tab,
+  // the "Back to case study" chip, and the "Explore in 3D ↓" hint. Created here so every
+  // viewer inherits them.
   _buildDockUI(){
     const win = document.createElement('div'); win.id = 'dockwin';
-    win.title = 'Replay the 3D walkthrough';
+    win.title = 'Explore in 3D — open the walkthrough';
     const min = document.createElement('button'); min.id = 'dockmin';
     min.setAttribute('aria-label', 'Minimise the 3D model'); min.textContent = '›';   // ›
     win.appendChild(min);
     const tab = document.createElement('button'); tab.id = 'docktab';
     tab.setAttribute('aria-label', 'Show the 3D model'); tab.innerHTML = '<span>‹</span>3D';  // ‹
-    // "Skip to case study" — jumps past the 3D walkthrough straight to the dock /
-    // case-study start. Shown during the walkthrough, hidden once the model docks.
+    // "Back to case study" — returns to the top of the page (the case study is now first).
+    // Shown during the 3D walkthrough, hidden while the model is docked over the case study.
     const skip = document.createElement('button'); skip.id = 'skipcase'; skip.type = 'button';
-    skip.setAttribute('aria-label', 'Skip the 3D walkthrough and jump to the case study');
-    skip.innerHTML = 'Skip to case study <span>↓</span>';
+    skip.setAttribute('aria-label', 'Back to the case study at the top of the page');
+    skip.innerHTML = '<span>↑</span> Back to case study';
     document.body.appendChild(win); document.body.appendChild(tab); document.body.appendChild(skip);
-    win.addEventListener('click', () => this.replay());
+    win.addEventListener('click', () => this.enterVisualizer());
     min.addEventListener('click', (e) => { e.stopPropagation(); this.collapse(); });
     tab.addEventListener('click', () => this.expand());
-    skip.addEventListener('click', () => this.skipToCase());
+    skip.addEventListener('click', () => this.backToCase());
+    // the "click the floater to see a 3D walkthrough" hint (it isn't shown up front anymore)
+    const dh = document.getElementById('dockhint'); if (dh) dh.innerHTML = 'Explore in 3D <span>↓</span>';
     this._win = win; this._tab = tab; this._skip = skip;
     this._layoutDockUI();
   }
@@ -512,19 +536,13 @@ export class DockController {
 
   collapse(){ this.collapsed = true; }
   expand(){ this.collapsed = false; }
-  // scroll back up to the last storyboard beat, full-screen — re-enters the 3D walkthrough
-  replay(){ this.expand(); scrollTo({ top: Math.max(0, this._storyEnd - innerHeight*0.5), behavior: 'smooth' }); }
+  // Click the docked floater -> jump DOWN to the start of the visualizer storyboard. The
+  // smooth-scroll passes through the un-dock zone, so the floater grows to full screen,
+  // the rotation ramps back to iso, and the hero title fades in on the way.
+  enterVisualizer(){ this.expand(); scrollTo({ top: Math.round(this._storyStart + this._undockSpan + 2), behavior: 'smooth' }); }
 
-  // skip the walkthrough: smooth-scroll straight to the case-study start, where the
-  // model has docked into its corner card. Targets the top of #case (dockK reaches 1
-  // there); falls back to the dock-complete scroll position if there's no #case.
-  skipToCase(){
-    this.expand();
-    const el = document.getElementById('case');
-    const top = el ? Math.round(el.getBoundingClientRect().top + scrollY)
-                   : Math.round(this._storyEnd + innerHeight * 0.25);
-    scrollTo({ top, behavior: 'smooth' });
-  }
+  // "Back to case study": the case study is now at the TOP, so return to the top of the page.
+  backToCase(){ this.expand(); scrollTo({ top: 0, behavior: 'smooth' }); }
 
   // lerp the fixed canvas from fullscreen to the top-right card; resize renderer to match
   applyDock(k){
@@ -533,7 +551,9 @@ export class DockController {
     const w = lerp(innerWidth, R.w, ke), h = lerp(innerHeight, R.h, ke);
     const top = lerp(0, R.top, ke), right = lerp(0, R.right, ke);
     const cv = this.canvas;
-    const dh = document.getElementById('dockhint'); if (dh) dh.style.top = (R.top + R.h + 8) + 'px';
+    const dh = document.getElementById('dockhint');
+    if (dh){ dh.style.top = (R.top + R.h + 12) + 'px';
+             dh.style.left = (innerWidth - R.right - R.w/2) + 'px'; dh.style.right = 'auto'; }
     cv.style.width = w+'px'; cv.style.height = h+'px';
     cv.style.top = top+'px'; cv.style.right = right+'px'; cv.style.left = 'auto';
     cv.classList.toggle('docked', k > 0.02);
@@ -549,7 +569,8 @@ export class DockController {
     cv.classList.toggle('collapsed', docked && this.collapsed);           // CSS slides it off-screen right
     if (this._win) this._win.style.display = (docked && !this.collapsed) ? 'block' : 'none';
     if (this._tab) this._tab.style.display = (docked && this.collapsed) ? 'flex' : 'none';
-    if (dh) dh.style.opacity = (k>0.85 && !this.collapsed) ? 0.55 : 0;
+    // "Explore in 3D ↓" hint chip — visible while the model is docked over the case study
+    if (dh) dh.style.opacity = (k>0.7 && !this.collapsed) ? 1 : 0;
   }
 
   // one storyboard-active frame: smooth scroll, dock the canvas, run storyboard or the

@@ -111,9 +111,25 @@ body.editing #skipcase { display: none; }
    case study (z>#case) so page content scrolls cleanly behind it) ---- */
 #c.docked { border: 1px solid rgba(255,255,255,.14); border-radius: 14px;
             box-shadow: 0 24px 60px rgba(0,0,0,.6); background: #0a0b0e; z-index: 6; }
-#dockhint { position: fixed; z-index: 6; top: 344px; right: 24px; width: 380px; text-align: center;
-            font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,.4);
-            opacity: 0; pointer-events: none; transition: opacity .3s; }
+/* "Explore in 3D ↓" hint chip — a soft-pulsing glass pill centred under the docked
+   floater, inviting the click (the 3D walkthrough isn't shown until you click/scroll
+   to it). Built + positioned by DockController; shown while the model is docked. */
+#dockhint { position: fixed; z-index: 7; transform: translateX(-50%); white-space: nowrap;
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 7px 14px; border-radius: 999px;
+            background: rgba(12,13,17,.5);
+            -webkit-backdrop-filter: blur(14px) saturate(1.3); backdrop-filter: blur(14px) saturate(1.3);
+            border: 1px solid rgba(255,255,255,.16); box-shadow: 0 8px 24px rgba(0,0,0,.35);
+            color: rgba(255,255,255,.85); font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+            opacity: 0; pointer-events: none; transition: opacity .4s;
+            animation: explorePulse 2.6s ease-in-out infinite; }
+#dockhint span { color: var(--accent); font-size: 13px; line-height: 1; display: inline-block;
+                 animation: hintbob 1.8s ease-in-out infinite; }
+@keyframes explorePulse {
+  0%, 100% { box-shadow: 0 8px 24px rgba(0,0,0,.35), 0 0 0 0 rgba(255,106,0,0); }
+  50%      { box-shadow: 0 8px 24px rgba(0,0,0,.35), 0 0 20px 1px rgba(255,106,0,.45); }
+}
+@keyframes hintbob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
 
 /* ---- docked window: click-to-replay overlay (#dockwin) + minimise (#dockmin) +
    collapsed edge tab (#docktab). Built by DockController; shown only when fully docked. ---- */
@@ -199,8 +215,12 @@ body.editing #dockhint, body.editing #dockwin, body.editing #docktab { display: 
   #panel { top: 12vh; left: 5vw; right: 5vw; max-width: none; }
   #panel h2 { font-size: clamp(30px, 9vw, 52px); }
   #blurb { bottom: 11vh; left: 5vw; right: 5vw; max-width: none; font-size: 13.5px; }
-  #dockhint { left: 14px; right: 14px; width: auto; }
+  #dockhint { padding: 6px 11px; font-size: 10px; letter-spacing: .1em; }
   #skipcase { bottom: 50px; padding: 8px 13px; font-size: 10px; letter-spacing: .12em; }
+  /* The case study leads on mobile, where the 3D floater is nearly full-width — so start
+     its content BELOW the floater + "Explore in 3D" chip (a clean hero-card → article
+     layout) instead of behind it. Higher specificity than each viewer's inline #case. */
+  body article#case { padding-top: 408px; }
 }
 /* bigger tap targets for the docked-window controls on touch devices */
 @media (pointer: coarse){
