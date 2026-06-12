@@ -54,7 +54,6 @@
 <div id="dockhint">Click to replay the 3D · minimise ›</div>
 
 <div id="hud-progress" class="hud">0%</div>
-<div id="scrollhint">scroll ↓</div>
 <div id="hint">press <b>G</b> for the appearance editor</div>
 
 <!-- editor shell (filled by AppearanceEditor) -->
@@ -307,7 +306,7 @@ async function start(){
 // the default). Pauses the storyboard so you just see the assembled model.
 function setupTuner(model){
   tuneMode = true;
-  for (const id of ['title','panel','blurb','dims','scrollhint','hint','hud-progress','dockhint','case']){
+  for (const id of ['title','panel','blurb','dims','hint','hud-progress','dockhint','case']){
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   }
   document.body.style.overflow = 'hidden';

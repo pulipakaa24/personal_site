@@ -73,19 +73,11 @@ body.editing #c { pointer-events: auto; }   /* OrbitControls in the editor */
 body.dev #hud-progress { display: block; }
 body.dev #hint { display: block; }
 #hint { position: fixed; z-index: 3; bottom: 16px; left: 14px; font-size: 11px; letter-spacing: 0.08em; opacity: 0.5; }
-#scrollhint {
-  position: fixed; z-index: 3; bottom: 20px; left: 50%; transform: translateX(-50%);
-  font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); opacity: 0.85;
-  animation: bob 1.8s ease-in-out infinite;
-}
-@keyframes bob { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,7px)} }
-
-/* ---- "Skip to case study" — built by DockController (all viewers). A glass chip
-   sitting just above the scroll hint during the walkthrough; click smooth-scrolls
-   straight to the docked case-study start. Hidden once the model docks (applyDock)
-   and while editing. User-facing (not dev-gated). ---- */
+/* ---- "Back to case study" — built by DockController (all viewers). A glass chip
+   at the bottom-centre during the walkthrough; click smooth-scrolls to the top.
+   Hidden once the model docks (applyDock) and while editing. User-facing (not dev-gated). ---- */
 #skipcase {
-  position: fixed; z-index: 3; left: 50%; bottom: 54px; transform: translateX(-50%);
+  position: fixed; z-index: 3; left: 50%; bottom: 8px; transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
   padding: 9px 16px; border-radius: 999px; font-family: inherit;
   background: rgba(12,13,17,.5);
@@ -184,7 +176,7 @@ body.editing nav { display: none; }
 /* ---- editor overlay (shared shell; each viewer fills #legend contents) ---- */
 #editor { position: fixed; z-index: 4; inset: 0; pointer-events: none; display: none; }
 body.editing #editor { display: block; }
-body.editing #scrollhint, body.editing #title,
+body.editing #title,
 body.editing #panel, body.editing #blurb, body.editing #dims,
 body.editing #case,                                              /* keep the docked case study from covering the full-screen editor canvas */
 body.editing #dockhint, body.editing #dockwin, body.editing #docktab { display: none; }   /* and hide the docked-window controls while editing */
@@ -216,7 +208,7 @@ body.editing #dockhint, body.editing #dockwin, body.editing #docktab { display: 
   #panel h2 { font-size: clamp(30px, 9vw, 52px); }
   #blurb { bottom: 11vh; left: 5vw; right: 5vw; max-width: none; font-size: 13.5px; }
   #dockhint { padding: 6px 11px; font-size: 10px; letter-spacing: .1em; }
-  #skipcase { bottom: 50px; padding: 8px 13px; font-size: 10px; letter-spacing: .12em; }
+  #skipcase { bottom: 6px; padding: 8px 13px; font-size: 10px; letter-spacing: .12em; }
   /* On phones the model starts MINIMISED (DockController, the edge tab), so the case study
      fills the top normally — no reserved gap needed (the old padding-top hack is gone).
      The minimised model hides IN PLACE with a quick fade (not the desktop slide-off-right),

@@ -490,11 +490,33 @@ bright satin steel, clean white plastic, saturated copper). The rig is almost en
 
 Self-contained, ~817 lines. Sections: hero, marquee, about, **work grid**, experience timeline, honors,
 coursework, skills, contact/footer.
-- **Work grid:** 4 row-wide **featured cards** (`.card.feat`) = the projects with CAD `.glb` files →
-  link to their 3D viewers: **Guadaloop** (→ `viewers/guadaloop/`), **RescueVision**
-  (→ `viewers/rescuevision/`), **SmartPT**, **BlindMaster**. Featured cards get a subtle corner **"3D"
-  cube badge**. LiDAR-SLAM, TweinStein, Harmonium are regular 2-col cards. Thumbnails live in
-  `assets/projects/<name>/`.
+- **Work grid (DESKTOP ≠ MOBILE since 2026-06-12):** 7 projects. The 4 with CAD `.glb` files are
+  `.card.feat` and link to their 3D viewers: **Guadaloop** (→ `viewers/guadaloop/`), **RescueVision**
+  (→ `viewers/rescuevision/`), **SmartPT**, **BlindMaster**; LiDAR-SLAM, TweinStein, Harmonium link to
+  `projects/*.html`. Thumbnails live in `assets/projects/<name>/`.
+  - **Mobile (≤860px): UNCHANGED** — `.card.feat` are big row/stacked **banners** with the thumbnail
+    always visible + corner "3D" cube badge; the 3 case-study projects are plain text cards.
+  - **Desktop (≥861px): hover-reveal gallery** (added in a `@media (min-width:861px)` block so mobile is
+    untouched). ALL 7 cards collapse to the **same compact text-card size** (`.card.feat` overridden to
+    look like a normal `.card`). At rest = title/badge/sub/tags/go only, no image. **On hover the text
+    fully fades out and the thumbnail fills the card** (`.ph` becomes an `opacity:0→1`, `position:absolute`
+    overlay at `z-index:3`, scoped as `.work-grid .card .ph` to outrank the base `.card.feat .ph` rules).
+    Viewer cards keep their in-`.ph` "3D" cube badge so it shows on the revealed thumbnail; case-study
+    cards show just the photo.
+  - **`.ph.fit` modifier (Guadaloop + BlindMaster):** their thumbnails are 3D **model renders on black
+    backgrounds** (`guadaloop/testrig.png`, `blindmaster/Thumbnail.png` — the blue/red hub render that
+    replaced the old `icon.png`). `.fit` = `object-fit:contain` + `background:#000` (base-level rule, so
+    BOTH mobile banner AND desktop hover show the whole model on black, blending with the render's own
+    black backdrop). The other photo thumbnails (RescueVision/SmartPT/LiDAR/TweinStein/Harmonium) stay
+    `object-fit:cover`. `.ph.fit` selectors carry extra specificity to beat both the base `.card.feat .ph
+    img.cover` and the desktop `.work-grid .card .ph img.cover` cover rules. The 3 text cards got a hidden `<div class="ph deskthumb">` (base
+    `display:none`, shown only on desktop) so they have a thumbnail to reveal: LiDAR → its hero,
+    Harmonium → `hero.jpeg`, **TweinStein → `tw_robot.jpeg`** (the car-between-barriers close-up from its
+    gallery, NOT `tw_hero.jpeg`). 7 cards in 2 cols intentionally leave an **uneven last row** (Harmonium
+    alone) — kept for scalability.
+  - **Headless gotcha:** clipped puppeteer screenshots (`page.screenshot({clip})`) of this grid render a
+    STALE/wrong layer for the hover-overlay `.ph` (shows images at rest even when computed `opacity` is
+    `0`). Verify with **full-viewport** screenshots + `page.hover()` instead (`/private/tmp/shot_hover.cjs`).
 - **Skill chips are clickable** — each opens a popover listing the projects + courses that used it,
   built by inverting a `PROJECTS`/`COURSES` skill map in the page script.
 - **Credentials convention (apply consistently):** de-emphasize but don't hide high-school-era signals.
@@ -572,6 +594,39 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-12** — **Landing page: mobile nav menu (hamburger → full-screen overlay).** On mobile the nav previously
+  hid all links except the Résumé button (`@media(max-width:860px){.navlinks a:not(.btn){display:none}}`) — so there
+  was no way to reach Work/Experience/About/Contact. Added a proper mobile menu: a **hamburger toggle** (`#menuToggle`,
+  3 `<span>` bars that animate into an X via `.open`) shown only ≤860px, and a **full-screen overlay** (`#mobileMenu`,
+  `position:fixed; inset:0; z-index:49` — just **below** the nav's z-50 so the brand + X stay on top) with large
+  uppercase links matching the site identity (`clamp(34px,11vw,52px)`, 800-weight, right-aligned `01–04` index numbers
+  via `.mi`, **Résumé** in `--accent` with a ↗). The ≤860px block now does `.navlinks{display:none}` +
+  `.menu-toggle{display:block}` (was hiding only non-btn links). JS (next to the nav-scroll handler): `setMenu(open)`
+  toggles `.open` on both, syncs `aria-expanded`/`aria-hidden`/`aria-label`, and adds `body.menu-open{overflow:hidden}`
+  to lock scroll; closes on link tap, **Esc**, or `resize` past 860px. **Verified headless** (`/private/tmp/menu_check.cjs`):
+  desktop unchanged (navlinks flex, toggle none); mobile closed (navlinks none, toggle block, menu hidden); open
+  (menu visible, aria-expanded true, body locked, all 5 links Work/Experience/About/Contact/Résumé); link tap
+  navigates (`#work`) + closes + unlocks; 0 console errors; screenshots confirm the bold overlay + hamburger↔X.
+- **2026-06-12** — **Removed the waggling "scroll ↓" hint; moved "Back to case study" to the screen bottom; BlindMaster
+  mobile-portrait overlay reposition (+ a regression bugfix).** Three small UX asks, all verified headless. (1)
+  **Dropped `#scrollhint`** (the bobbing "scroll ↓" at bottom-centre) from all four viewers: removed the `<div
+  id="scrollhint">` markup, the `#scrollhint`/`@keyframes bob` CSS + the `body.editing #scrollhint` hide rule
+  (`viewer.css`), the `disp('scrollhint',…)` call in `DockController.applyDock` (`engine.js`), and `'scrollhint'`
+  from smartpt's tuner-hide list + blindmaster's `OVERLAY_IDS`. (2) **`#skipcase` ("↑ Back to case study") took its
+  place** — moved from `bottom:54px`→**`8px`** desktop / `50px`→**`6px`** mobile (right at the screen edge, where the
+  scroll hint used to be). (3) **BlindMaster portrait-mobile overlays repositioned** (`drawDims('drive')` slat glyph +
+  the finale "SET POSITION" badge): on `COARSE && innerWidth<innerHeight` both now render **top-left** (glyph at
+  `gx:16, gy:104`; badge at `left:16,top:80`) and **shrunk** (glyph 116×104 vs 168×150, number 28 vs 38px; badge 46 vs
+  64px) so they don't collide with the bottom-right `#blurb`; desktop/landscape unchanged (lower-left, full size).
+  **Regression caught + fixed:** the first BlindMaster edit used `COARSE` but it **wasn't in the file's `engine.js`
+  import list** → `drawDims`/the finale threw `ReferenceError: COARSE is not defined` every frame during the drive &
+  finale beats, which propagated out of the storyboard resolve in `tick()` and **broke/froze those beats** (the user's
+  "storyboard beats jumbled up / everything slightly broken"). Fixed by adding `COARSE` to the import. **Lesson:**
+  `engine.js` exports are explicitly imported per viewer — when reusing a shared const (`COARSE`, `DEV`, etc.) in a
+  viewer, check it's in that file's import list first. **Verified** (`/private/tmp/bm_check.cjs` seeking real
+  storyboard progress via the `#dev` HUD + `/private/tmp/all_smoke.cjs`): 0 console errors across all four viewers
+  full-sweep; desktop drive beat unchanged (slat window lower-left); mobile drive + finale overlays top-left, clear of
+  the nav and blurb.
 - **2026-06-12** — **Harmonium hero: thumbnail of the live app + the hero box itself links to the live demo (dropped
   the "Live demo" button).** The user wanted the `.hero-media` to be a clickable link to the live site
   (`https://tvg-vibeathon.vercel.app`) showing a **site thumbnail**, and the redundant "Live demo ↗" `.btn` removed.

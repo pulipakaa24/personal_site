@@ -54,7 +54,6 @@
 <div id="dockhint">Click to replay the 3D · minimise ›</div>
 
 <div id="hud-progress" class="hud">0%</div>
-<div id="scrollhint">scroll ↓</div>
 <div id="hint">press <b>G</b> to assign part groups</div>
 
 <!-- editor shell (filled by the grouping editor — press G) -->
@@ -225,7 +224,7 @@
 <script type="module">
 import {
   createStudioScene, loadGLB, prepareMeshes, centerModel, setOpacity,
-  frameCamera, makeSlot, makeVis, Storyboard, DockController, pca, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, DEV, THREE
+  frameCamera, makeSlot, makeVis, Storyboard, DockController, pca, projectPoint, clamp01, lerp, smoothstep, ease, VIEWS, DEV, COARSE, THREE
 } from '../shared/engine.js';
 
 const canvas = document.getElementById('c');
@@ -387,17 +386,17 @@ function defineChapters(){
     // 03 · drivetrain + position payoff (box translucent) — scroll-tied gears + slats
     { r:[0.32,0.50], box:'mech', view:'iso', pan:0.30, act:'drive',
       vis:vis({ALL:TRANS, servo:1, drive:1, encgear:1, enc:1, bottomhook:1}),
-      panel:side('drive','A continuous-rotation servo turns the hook-gear; a meshed encoder gear feeds the rotary encoder that counts ticks — 1:1, opposite directions. The bottom hook is a separate manual wand: turn the blind by hand and the servo follows.','Tilt & track'), dims:'drive' },
+      panel:side('drive','A continuous-rotation servo turns the hook-gear; a meshed encoder gear feeds the rotary encoder that counts ticks — not quite 1:1, but it doesn\'t matter since the user calibrates during setup anyway. The bottom hook is a separate manual wand: turn the blind by hand and the servo follows.','Tilt & track'), dims:'drive' },
     { r:[0.50,0.62], box:'mech', view:'iso', pan:0.30, act:'drive',
       vis:vis({ALL:TRANS, servo:1, drive:1, encgear:1, enc:1, bottomhook:1}),
-      panel:side('drive','One 0–10 model (5 = open): each step is half a gear turn, so the encoder counts across the blind’s real travel — calibrated, then shared verbatim across the firmware, server and app.','0 → 5 → 10'), dims:'drive' },
+      panel:side('drive','One 0–10 model (5 = open): the encoder counts 24 ticks per revolution, measuring the blind’s real travel compared to the calibrated values, then shares the classified 0-10 bin verbatim across the firmware, server and app.','0 → 5 → 10'), dims:'drive' },
 
     // back to assembly
     { r:[0.62,0.68], box:'all', view:'iso', pan:0, vis:vis({ALL:1}), panel:{mode:'none'}, blurb:'', dims:null },
 
     // 04 · electronics — top / servo side
     { r:[0.68,0.78], box:'elecTop', view:'iso', pan:0.42, vis:vis({ALL:TRANS, xiao:1}),
-      panel:side('elec','A Seeed XIAO ESP32-C6 runs the show — ESP-IDF + FreeRTOS, NimBLE for setup, Socket.IO for control — seated on the top PCB beside the servo, with the USB-C port out the side for flashing and charging.','XIAO ESP32-C6'), dims:null },
+      panel:side('elec','A Seeed XIAO ESP32-C6 runs the show — ESP-IDF + FreeRTOS, NimBLE for setup, Socket.IO for control — seated in the heart of the device, with the USB-C port out the side for flashing and, in the current version, charging.','XIAO ESP32-C6'), dims:null },
     // 05 · electronics — bottom / battery side + power story
     { r:[0.78,0.86], box:'elecBot', view:'isoL', pan:0.42, vis:vis({ALL:TRANS, battery:1, power:1, pcb:0.5, xiao:1}),
       panel:side('power','A LiPo feeds a boost converter; a MAX17048 fuel gauge reports state-of-charge. Dynamic frequency scaling + light sleep + GPIO-gated servo power keep idle draw low.','Battery + BMS'), dims:null },
@@ -568,7 +567,13 @@ function drawDims(kind){
   const state = n === 5 ? 'OPEN' : (n < 5 ? 'CLOSING ↓' : 'CLOSING ↑');
   // venetian-slat glyph: horizontal slats whose projected height = openness.
   // flat/open (tilt 0) → thin slats, light through; tilted → thick, closed.
-  const gx = 64, gy = H - 372, gw = 168, gh = 150, N = 7;     // lower-left window
+  const mob = COARSE && W < H;   // portrait mobile — place top-left, shrink
+  const gx = mob ? 16 : 64, gy = mob ? 104 : H - 372;
+  const gw = mob ? 116 : 168,   gh = mob ? 104 : 150, N = 7;
+  const numSz = mob ? 28 : 38, numSubSz = mob ? 16 : 20;
+  const lblSz = mob ? 11 : 13, encSz = mob ? 10 : 12;
+  const readoutY = gy + gh + (mob ? 38 : 52);
+  const posY     = gy + gh + (mob ? 54 : 74);
   const pitch = gh / N, depth = pitch * 1.18, edge = 2;
   const th = edge + depth * Math.abs(Math.sin(tiltRad));
   let slats = '';
@@ -584,9 +589,9 @@ function drawDims(kind){
     <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="4" fill="url(#sky)"/>
     ${slats}
     <!-- numeric readout -->
-    <text x="${gx-12}" y="${gy+gh+52}" fill="#fff" style="font:800 38px 'Helvetica Neue',Arial;letter-spacing:-.02em;text-anchor:start;dominant-baseline:auto">${n}<tspan fill="#ffffff66" style="font:800 20px 'Helvetica Neue',Arial"> / 10</tspan></text>
-    <text x="${gx-12}" y="${gy+gh+74}" fill="#ff6a00" style="font:700 13px 'Helvetica Neue',Arial;letter-spacing:.16em;text-anchor:start;dominant-baseline:auto">POSITION · ${state}</text>
-    <text x="${gx-12}" y="${gy-26}" fill="#ffffff8c" style="font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.04em;text-anchor:start;dominant-baseline:auto">ENCODER · ${ticks} ticks · ${turns} turns</text>
+    <text x="${gx-12}" y="${readoutY}" fill="#fff" style="font:800 ${numSz}px 'Helvetica Neue',Arial;letter-spacing:-.02em;text-anchor:start;dominant-baseline:auto">${n}<tspan fill="#ffffff66" style="font:800 ${numSubSz}px 'Helvetica Neue',Arial"> / 10</tspan></text>
+    <text x="${gx-12}" y="${posY}" fill="#ff6a00" style="font:700 ${lblSz}px 'Helvetica Neue',Arial;letter-spacing:.16em;text-anchor:start;dominant-baseline:auto">POSITION · ${state}</text>
+    <text x="${gx-12}" y="${gy-26}" fill="#ffffff8c" style="font:600 ${encSz}px ui-monospace,Menlo,monospace;letter-spacing:.04em;text-anchor:start;dominant-baseline:auto">ENCODER · ${ticks} ticks · ${turns} turns</text>
   </svg>`;
   dimsEl.innerHTML = svg;
 }
@@ -698,10 +703,14 @@ function updateFinale(t, fade){
     + `<div style="display:inline-block;background:rgba(8,10,14,.74);border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:5px 11px;text-align:center;-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);box-shadow:0 4px 16px rgba(0,0,0,.4)">`
     + `<div style="font:800 14px/1 'Helvetica Neue',Arial;letter-spacing:.1em;color:#fff">${txt}</div>`
     + (sub ? `<div style="font:600 10px ui-monospace,Menlo,monospace;color:#ff9a52;margin-top:3px;letter-spacing:.02em">${sub}</div>` : '') + `</div></div>`;
-  // big stylish command badge, lower-left, below the app
-  const cmd = `<div style="position:fixed;left:52px;bottom:118px;font-family:'Helvetica Neue',Arial,sans-serif;transform:scale(${(1 + 0.05*pulse).toFixed(3)});transform-origin:left bottom">`
-    + `<div style="font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.26em;color:#ff6a00">SET&nbsp;POSITION</div>`
-    + `<div style="font:800 64px/0.86 'Helvetica Neue',Arial;letter-spacing:-.03em;color:#fff;margin-top:6px;text-shadow:0 0 ${(18*pulse).toFixed(0)}px rgba(255,106,0,${(0.7*pulse).toFixed(2)})">${tgt}<span style="font-size:26px;color:#ffffff59;letter-spacing:0"> / 10</span></div>`
+  // big stylish command badge — lower-left on desktop, top-left on mobile portrait
+  const fmob = COARSE && innerWidth < innerHeight;
+  const cmdPos = fmob ? 'left:16px;top:80px' : 'left:52px;bottom:118px';
+  const cmdOrig = fmob ? 'left top' : 'left bottom';
+  const bigSz = fmob ? 46 : 64, bigSubSz = fmob ? 19 : 26, titleSz = fmob ? 10 : 11;
+  const cmd = `<div style="position:fixed;${cmdPos};font-family:'Helvetica Neue',Arial,sans-serif;transform:scale(${(1 + 0.05*pulse).toFixed(3)});transform-origin:${cmdOrig}">`
+    + `<div style="font:700 ${titleSz}px ui-monospace,Menlo,monospace;letter-spacing:.26em;color:#ff6a00">SET&nbsp;POSITION</div>`
+    + `<div style="font:800 ${bigSz}px/0.86 'Helvetica Neue',Arial;letter-spacing:-.03em;color:#fff;margin-top:6px;text-shadow:0 0 ${(18*pulse).toFixed(0)}px rgba(255,106,0,${(0.7*pulse).toFixed(2)})">${tgt}<span style="font-size:${bigSubSz}px;color:#ffffff59;letter-spacing:0"> / 10</span></div>`
     + `<div style="font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.08em;color:#ffffff8c;margin-top:8px">app&nbsp;→&nbsp;server&nbsp;→&nbsp;hub</div></div>`;
   finLabelEl.innerHTML =
     chip(A.x, A.y - 16, 'APP', 'blinds_flutter') +
@@ -780,7 +789,7 @@ function setupGroupEditor(){
   });
   document.getElementById('dumpClose')?.addEventListener('click', () => document.getElementById('dump').style.display = 'none');
 }
-const OVERLAY_IDS = ['title','panel','blurb','dims','scrollhint','hud-progress','dockhint'];
+const OVERLAY_IDS = ['title','panel','blurb','dims','hud-progress','dockhint'];
 function enterEdit(){
   editor.on = true; document.body.classList.add('editing');
   controls.enabled = true; controls.target.copy(boxes.all.getCenter(new THREE.Vector3()));

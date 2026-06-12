@@ -567,7 +567,7 @@ export class DockController {
     cv.style.pointerEvents = (COARSE || k > 0.5) ? 'none' : 'auto';
     this.renderer.setSize(w, h, false); this.camera.aspect = w/h; this.camera.updateProjectionMatrix();
     const disp = (id, hide) => { const el = document.getElementById(id); if (el) el.style.display = hide ? 'none' : ''; };
-    disp('scrollhint', k>0.03); disp('hint', k>0.03); disp('skipcase', k>0.03);
+    disp('hint', k>0.03); disp('skipcase', k>0.03);
     const hp = document.getElementById('hud-progress'); if (hp) hp.style.opacity = k>0.4 ? 0 : 0.7;
 
     // collapse-to-edge-tab + click-to-replay: only once the card is essentially fully docked

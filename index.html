@@ -62,7 +62,42 @@
   .btn-solid{background:var(--fg); color:#000; border-color:var(--fg)}
   .btn-solid:hover{background:var(--accent); border-color:var(--accent); color:#000}
   .navlinks .btn{color:var(--fg)}
-  .menu-toggle{display:none}
+
+  /* hamburger toggle — hidden on desktop, revealed on mobile (≤860px) */
+  .menu-toggle{
+    display:none; position:relative; z-index:60; width:42px; height:42px; padding:0; margin:-4px;
+    background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  }
+  .menu-toggle span{
+    position:absolute; left:10px; right:10px; height:2px; border-radius:2px; background:var(--fg);
+    transition:transform .3s var(--ease), opacity .2s var(--ease);
+  }
+  .menu-toggle span:nth-child(1){top:14px}
+  .menu-toggle span:nth-child(2){top:20px}
+  .menu-toggle span:nth-child(3){top:26px}
+  .menu-toggle.open span:nth-child(1){transform:translateY(6px) rotate(45deg)}
+  .menu-toggle.open span:nth-child(2){opacity:0}
+  .menu-toggle.open span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+
+  /* full-screen mobile menu (sits just below the nav so the brand + X stay on top) */
+  .mobile-menu{
+    position:fixed; inset:0; z-index:49; display:flex; flex-direction:column; justify-content:center;
+    gap:2px; padding:88px 28px env(safe-area-inset-bottom) 28px;
+    background:rgba(0,0,0,.96); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    opacity:0; visibility:hidden; transform:translateY(-10px);
+    transition:opacity .35s var(--ease), transform .35s var(--ease), visibility .35s;
+  }
+  .mobile-menu.open{opacity:1; visibility:visible; transform:none}
+  .mobile-menu a{
+    display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+    font-size:clamp(34px,11vw,52px); font-weight:800; text-transform:uppercase; letter-spacing:-.02em;
+    line-height:1.1; color:var(--fg); padding:15px 0; border-bottom:1px solid var(--line);
+    transition:color .2s var(--ease), padding-left .25s var(--ease);
+  }
+  .mobile-menu a .mi{font-size:12px; font-weight:600; letter-spacing:.3em; color:var(--faint); transform:translateY(-2px)}
+  .mobile-menu a:hover,.mobile-menu a:active{color:var(--accent); padding-left:8px}
+  .mobile-menu a.resume{color:var(--accent); border-bottom:0; margin-top:10px}
+  body.menu-open{overflow:hidden}
 
   /* ---------- hero ---------- */
   .hero{position:relative; min-height:100svh; display:flex; align-items:center; overflow:hidden}
@@ -185,12 +220,17 @@
   .card.feat .ph img.cover{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; display:block}
   .card.feat .ph.logo-ph{background:radial-gradient(120% 120% at 50% 28%, rgba(255,106,0,.16), transparent 62%), #0a0a0a}
   .card.feat .ph img.logo{max-width:46%; max-height:58%; object-fit:contain; filter:invert(1); opacity:.9}
+  /* `.fit` = model renders shown whole (contain) on a black tile — Guadaloop + BlindMaster (mobile + desktop) */
+  .card.feat .ph.fit{background:#000}
+  .card.feat .ph.fit img.cover{object-fit:contain}
   /* subtle "3D" badge in the corner of the live-rig thumbnail */
   .card.feat .ph .d3{position:absolute; bottom:12px; right:12px; z-index:2; display:inline-flex; align-items:center; gap:6px;
       padding:5px 9px; border-radius:8px; background:rgba(10,10,10,.55); backdrop-filter:blur(4px);
       border:1px solid rgba(255,255,255,.18); color:rgba(255,255,255,.85); font-size:10px; letter-spacing:.14em; text-transform:uppercase}
   .card.feat .ph .d3 svg{width:12px; height:12px}
   .card.feat .meat{padding:34px 38px 34px 0; flex:1}
+  /* desktop hover-reveal thumbnail on the text cards — hidden by default so mobile stays untouched */
+  .ph.deskthumb{display:none}
 
   /* ---------- timeline ---------- */
   .timeline{position:relative; margin-left:6px}
@@ -226,6 +266,7 @@
   .course{display:flex; gap:14px; align-items:baseline; padding:10px 0; border-top:1px solid var(--line)}
   .course .code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:var(--faint); min-width:78px; letter-spacing:.02em}
   .course .name{font-size:14.5px; color:rgba(255,255,255,.82)}
+  .course .sem{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:11px; color:var(--faint); margin-left:auto; white-space:nowrap; letter-spacing:.03em; opacity:.7}
   .course-note{margin-top:34px; padding-top:18px; border-top:1px solid var(--line); font-size:13px; color:var(--faint); max-width:80ch}
 
   /* ---------- skills ---------- */
@@ -266,8 +307,33 @@
   .reveal.in{opacity:1; transform:none}
   .reveal.d1{transition-delay:.08s}.reveal.d2{transition-delay:.16s}.reveal.d3{transition-delay:.24s}
 
+  /* ---------- desktop work grid: uniform compact cards; hover swaps text → thumbnail ---------- */
+  @media (min-width:861px){
+    /* collapse the featured image-banners into the compact small-card style so every card matches */
+    .card.feat{
+      grid-column:auto; min-height:230px; flex-direction:column; align-items:stretch;
+      gap:0; padding:26px 26px 24px; background:var(--card);
+    }
+    .card.feat .meat{padding:0; flex:1; display:flex; flex-direction:column; min-width:0}
+
+    /* the thumbnail panel becomes a hover-reveal overlay that fills the whole card
+       (scoped under .work-grid so these outrank the base `.card.feat .ph` rules) */
+    .work-grid .card .ph{
+      position:absolute; inset:0; flex:none; width:auto; height:auto; aspect-ratio:auto;
+      border-radius:inherit; display:flex; align-items:center; justify-content:center;
+      opacity:0; pointer-events:none; z-index:3; transition:opacity .4s var(--ease);
+    }
+    .work-grid .card .ph img.cover{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border-radius:inherit; display:block}
+    .work-grid .card:hover .ph{opacity:1}
+
+    /* on hover the text fully clears so only the thumbnail shows */
+    .work-grid .card .top, .work-grid .card .sub, .work-grid .card .tags, .work-grid .card .go{transition:opacity .25s var(--ease)}
+    .work-grid .card:hover .top, .work-grid .card:hover .sub, .work-grid .card:hover .tags, .work-grid .card:hover .go{opacity:0}
+  }
+
   @media (max-width:860px){
-    .navlinks a:not(.btn){display:none}
+    .navlinks{display:none}
+    .menu-toggle{display:block}
     .about-grid{grid-template-columns:1fr; gap:34px}
     .photo-frame{max-width:240px}
     .work-grid,.honors,.skillgroups,.coursegroups,.facts{grid-template-columns:1fr}
@@ -296,13 +362,25 @@
 <nav id="nav">
   <a class="brand" href="#top"><img src="assets/logo.png" alt="logo"/> ADITYA&nbsp;PULIPAKA</a>
   <div class="navlinks">
-    <a href="#work">Work</a>
+    <a href="#work">Projects</a>
     <a href="#experience">Experience</a>
     <a href="#about">About</a>
     <a href="#contact">Contact</a>
     <a class="btn" href="assets/Aditya Pulipaka Resume.pdf" target="_blank" rel="noopener">Résumé ↗</a>
   </div>
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+    <span></span><span></span><span></span>
+  </button>
 </nav>
+
+<!-- ---------- MOBILE MENU ---------- -->
+<div class="mobile-menu" id="mobileMenu" aria-hidden="true">
+  <a href="#work"><span>Projects</span><span class="mi">01</span></a>
+  <a href="#experience"><span>Experience</span><span class="mi">02</span></a>
+  <a href="#about"><span>About</span><span class="mi">03</span></a>
+  <a href="#contact"><span>Contact</span><span class="mi">04</span></a>
+  <a class="resume" href="assets/Aditya Pulipaka Resume.pdf" target="_blank" rel="noopener"><span>Résumé</span><span class="mi">↗</span></a>
+</div>
 
 <!-- ---------- HERO ---------- -->
 <header class="hero" id="top">
@@ -375,7 +453,7 @@
 
       <!-- FEATURED: Guadaloop 3D rig -->
       <a class="card feat reveal" href="viewers/guadaloop/index.html">
-        <div class="ph">
+        <div class="ph fit">
           <img class="cover" src="assets/projects/guadaloop/testrig.png" alt="Guadaloop levitation test rig CAD render" loading="lazy"/>
           <span class="d3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>3D</span>
         </div>
@@ -416,7 +494,7 @@
 
       <!-- FEATURED: BlindMaster -->
       <a class="card feat reveal" href="viewers/blindmaster/index.html">
-        <div class="ph logo-ph"><img class="logo" src="assets/projects/blindmaster/icon.png" alt="BlindMaster app icon"/>
+        <div class="ph fit"><img class="cover" src="assets/projects/blindmaster/Thumbnail.png" alt="BlindMaster smart-blinds hub model render"/>
           <span class="d3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>3D</span></div>
         <div class="meat">
           <div class="top"><h3>BlindMaster</h3></div>
@@ -429,6 +507,7 @@
 
       <!-- LiDAR SLAM -->
       <a class="card reveal" href="projects/lidar-slam.html">
+        <div class="ph deskthumb"><img class="cover" src="assets/projects/lidar-slam/1755029891520.jpeg" alt="LiDAR SLAM point-cloud localization" loading="lazy"/></div>
         <div class="top"><h3>LiDAR SLAM & Localization</h3></div>
         <p class="sub">A LiDAR SLAM + map-based localization pipeline for UT Dallas NOVA's autonomous
           vehicle, built on KISS-ICP / Open3D. Fused ICP with feature matching for sub-5 cm accuracy in CARLA.</p>
@@ -438,6 +517,7 @@
 
       <!-- TweinStein -->
       <a class="card reveal d1" href="projects/tweinstein.html">
+        <div class="ph deskthumb"><img class="cover" src="assets/projects/tweinstein/tw_robot.jpeg" alt="TweinStein autonomous racer between track barriers" loading="lazy"/></div>
         <div class="top"><h3>TweinStein</h3><span class="badge win">🏆 1st · ECE445M Final Race</span></div>
         <p class="sub">An autonomous racer on a custom RTOS — PD wall-follower with optional RL residual control + custom heuristic-based 
           overtaking state machine. Won the ECE445M final race. (I developed the PD controller and classical logic, and we won without an RL model 👀)</p>
@@ -447,6 +527,7 @@
 
       <!-- Harmonium -->
       <a class="card reveal d1" href="projects/harmonium.html">
+        <div class="ph deskthumb"><img class="cover" src="assets/projects/harmonium/hero.jpeg" alt="Harmonium browser instrument with hand tracking" loading="lazy"/></div>
         <div class="top"><h3>Harmonium</h3><span class="badge win">Most Risky · TVG</span></div>
         <p class="sub">A browser-based instrument simulator with hand tracking so you can see and hear
           yourself play (even learn!) without buying or making a trip to a store. "Most Risky Hack" at the TVG Vibeathon.</p>
@@ -564,41 +645,47 @@
         <h2>What I've<br>studied</h2>
       </div>
       <p>ECE Honors coursework at UT Austin — embedded systems, computing, signals &amp; circuits, and the
-        math underneath. All A's (4.00).</p>
+        underlying math.</p>
     </div>
     <div class="coursegroups">
       <div class="reveal">
-        <h6>Embedded & Systems</h6>
-        <div class="course"><span class="code">ECE319H</span><span class="name">Intro to Embedded Systems (Honors)</span></div>
-        <div class="course"><span class="code">ECE445M</span><span class="name">Embedded & Real-Time Systems Laboratory</span></div>
-        <div class="course"><span class="code">ECE460N</span><span class="name">Computer Architecture</span></div>
-        <div class="course"><span class="code">ECE306</span><span class="name">Introduction to Computing</span></div>
+        <h6>Embedded + Real-Time Systems</h6>
+        <div class="course"><span class="code">ECE445M</span><span class="name">Embedded & Real-Time Systems Laboratory (RTOS)</span><span class="sem">Spr '26</span></div>
+        <div class="course"><span class="code">ECE319H</span><span class="name">Intro to Embedded Systems (Honors)</span><span class="sem">Spr '25</span></div>
       </div>
       <div class="reveal d1">
-        <h6>Software & Computing</h6>
-        <div class="course"><span class="code">ECE312H</span><span class="name">Software Design & Implementation I (Honors)</span></div>
-        <div class="course"><span class="code">COE379L</span><span class="name">Software Design for Responsible Intelligent Systems</span></div>
-        <div class="course"><span class="code">CS309</span><span class="name">Quantum Computing I (FRI)</span></div>
+        <h6>Computer Architecture &amp; Digital Logic</h6>
+        <div class="course"><span class="code">ECE460N</span><span class="name">Computer Architecture</span><span class="sem">Fall '25</span></div>
+        <div class="course"><span class="code">ECE316</span><span class="name">Digital Logic Design</span><span class="sem">Spr '25</span></div>
       </div>
       <div class="reveal">
-        <h6>Signals, Circuits & Hardware</h6>
-        <div class="course"><span class="code">ECE302</span><span class="name">Intro to Electrical Engineering</span></div>
-        <div class="course"><span class="code">ECE313H</span><span class="name">Linear Systems & Signals (Honors)</span></div>
-        <div class="course"><span class="code">ECE411H</span><span class="name">Circuit Theory (Honors)</span></div>
-        <div class="course"><span class="code">ECE316</span><span class="name">Digital Logic Design</span></div>
-        <div class="course"><span class="code">ECE385J</span><span class="name">Neural Engineering</span></div>
+        <h6>Electrical Engineering &amp; Circuits</h6>
+        <div class="course"><span class="code">ECE411H</span><span class="name">Circuit Theory (Honors)</span><span class="sem">Fall '25</span></div>
+        <div class="course"><span class="code">ECE302</span><span class="name">Intro to Electrical Engineering</span><span class="sem">Fall '24</span></div>
+      </div>
+      <div class="reveal d1">
+        <h6>Signals &amp; Applications Thereof</h6>
+        <div class="course"><span class="code">ECE385J</span><span class="name">Neural Engineering</span><span class="sem">Spr '26</span></div>
+        <div class="course"><span class="code">ECE313H</span><span class="name">Linear Systems & Signals (Honors)</span><span class="sem">Fall '25</span></div>
+      </div>
+      <div class="reveal">
+        <h6>Software & Computing</h6>
+        <div class="course"><span class="code">COE379L</span><span class="name">Software Design for Responsible Intelligent Systems</span><span class="sem">Fall '25</span></div>
+        <div class="course"><span class="code">CS309</span><span class="name">Quantum Computing I (FRI)</span><span class="sem">Spr '25</span></div>
+        <div class="course"><span class="code">ECE312H</span><span class="name">Software Design & Implementation I (Honors)</span><span class="sem">Spr '25</span></div>
+        <div class="course"><span class="code">ECE306</span><span class="name">Introduction to Computing</span><span class="sem">Fall '24</span></div>
       </div>
       <div class="reveal d1">
         <h6>Mathematics</h6>
-        <div class="course"><span class="code">M427L</span><span class="name">Multivariable Calculus (Honors)</span></div>
-        <div class="course"><span class="code">M427J</span><span class="name">Differential Equations w/ Linear Algebra</span></div>
-        <div class="course"><span class="code">M340L</span><span class="name">Matrices & Matrix Calculations</span></div>
-        <div class="course"><span class="code">M325K</span><span class="name">Discrete Mathematics</span></div>
+        <div class="course"><span class="code">M340L</span><span class="name">Matrices & Matrix Calculations</span><span class="sem">Fall '25</span></div>
+        <div class="course"><span class="code">M325K</span><span class="name">Discrete Mathematics</span><span class="sem">Sum '25</span></div>
+        <div class="course"><span class="code">M427J</span><span class="name">Differential Equations w/ Linear Algebra</span><span class="sem">Spr '25</span></div>
+        <div class="course"><span class="code">M427L</span><span class="name">Multivariable Calculus (Honors)</span><span class="sem">Fall '24</span></div>
       </div>
       <div class="reveal">
         <h6>Communication & Innovation</h6>
-        <div class="course"><span class="code">ECE333T</span><span class="name">Engineering Communication</span></div>
-        <div class="course"><span class="code">MAN327</span><span class="name">Innovation & Entrepreneurship</span></div>
+        <div class="course"><span class="code">ECE333T</span><span class="name">Engineering Communication</span><span class="sem">Spr '26</span></div>
+        <div class="course"><span class="code">MAN327</span><span class="name">Innovation & Entrepreneurship</span><span class="sem">Spr '26</span></div>
       </div>
     </div>
     <p class="course-note reveal">Foundational calculus, engineering physics, and university core
@@ -682,6 +769,25 @@
   const nav = document.getElementById('nav');
   const onScroll = () => nav.classList.toggle('scrolled', scrollY > 24);
   addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+  // mobile menu — hamburger toggles a full-screen overlay; closes on link tap, Esc,
+  // or growing past the mobile breakpoint.
+  const menuToggle = document.getElementById('menuToggle');
+  const mobileMenu = document.getElementById('mobileMenu');
+  if (menuToggle && mobileMenu){
+    const setMenu = (open) => {
+      menuToggle.classList.toggle('open', open);
+      mobileMenu.classList.toggle('open', open);
+      menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      menuToggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+      mobileMenu.setAttribute('aria-hidden', open ? 'false' : 'true');
+      document.body.classList.toggle('menu-open', open);
+    };
+    menuToggle.addEventListener('click', () => setMenu(!mobileMenu.classList.contains('open')));
+    mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setMenu(false)));
+    addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+    addEventListener('resize', () => { if (innerWidth > 860) setMenu(false); });
+  }
 
   // reveal on enter
   const io = new IntersectionObserver((entries)=>{
