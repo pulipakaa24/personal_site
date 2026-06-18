@@ -87,7 +87,10 @@ personal_site/                      ← repo root (serve THIS dir; see §10)
 ├── assets/
 │   ├── project.css                 ← shared project-page identity (tokens, nav, type, footer, reveals)
 │   ├── project.js                  ← shared project-page behavior (nav, reveal animations)
-│   └── projects/<name>/            ← thumbnails (guadaloop/, rescuevision/, smartpt/, blindmaster/, …)
+│   ├── projects/<name>/            ← thumbnails (guadaloop/, rescuevision/, smartpt/, blindmaster/, …)
+│   └── Aditya-Pulipaka-Portfolio.pdf ← generated dark dossier (committed by CI; see changelog 2026-06-18)
+├── export/                         ← PDF dossier build tool — build-pdf.mjs, dossier.css, fonts/ (dev/CI only, own package.json)
+├── .github/workflows/build-pdf.yml ← CI: rebuild + commit the dossier PDF on push to main
 ├── projects/                       ← per-project case-study pages (regular scrolling pages)
 │   ├── rescuevision.html  smartpt.html  blindmaster.html
 │   └── harmonium.html  lidar-slam.html  tweinstein.html
@@ -594,6 +597,41 @@ git-tracked, agent-agnostic version — keep both current.
 
 Newest first. Append an entry whenever you ship something.
 
+- **2026-06-18** — **PDF export: a one-click "Download portfolio (PDF)" that renders the whole site into a dark,
+  on-brand dossier — text + 3D model beats — generated in CI on every push to main.** New self-contained build tool
+  under **`export/`** (its own `package.json`; dev/CI-only deps `puppeteer-core` + `pngjs` + `pdf-lib`, so the SITE stays
+  dependency-free). `export/build-pdf.mjs` (1) starts a tiny static server over the repo root, (2) **extracts content
+  straight from the live DOM** of `index.html` + the 3 project pages + the 4 viewer `#case` articles (single source of
+  truth — no copied prose; video `<iframe>`s become print link-cards; asset paths normalised to root-absolute;
+  `loading="lazy"` stripped so the readiness wait can't hang), (3) **captures 3D "beats" from each viewer's own
+  storyboard** — scrolls the inverted-flow scroll-map to chosen progress values, reads the live `#blurb`/`.b-tag`
+  caption, screenshots the `#c` canvas transparent (`omitBackground` + page bg nulled + overlays hidden) and
+  **autocrops to the model bounds** (pngjs), (4) assembles `export.html` styled by **`export/dossier.css`** (a
+  paged-media restyle of the site identity — dark, vendored **Inter + JetBrains Mono** woff2 so the PDF is
+  deterministic across Mac/Linux/recipients, `print-color-adjust:exact`; per-page breathing room from real top/bottom
+  page margins, inter-section gaps from small margins (decoupled), `break-inside:avoid` so a section moves whole rather
+  than splitting), (5) renders with **`page.pdf()`** (real top/bottom margins, sides 0) → vector text, then
+  **post-processes with `pdf-lib`** to paint the (white) top/bottom margin strips black for full-bleed and stamp the
+  page numbers → **`assets/Aditya-Pulipaka-Portfolio.pdf`** (~32 pp). Each viewer project gets a **hero render + a
+  captioned 2-col beat filmstrip** (full blurbs, no truncation); the 3 case-study pages get a **2-column hero** (text
+  left, image right, mirroring the site).
+  **GPU toggle:** local default = macOS **Metal** (ANGLE) for fast capture; **CI / `SOFTWARE_GL=1` = SwiftShader**
+  for parity with the GPU-less Linux runner (verified identical: 25/25 unique renders, 0 blank). **CI** = new
+  `.github/workflows/build-pdf.yml` (push→main, `paths-ignore` the PDF; installs Chrome via `browser-actions/setup-chrome`;
+  `npm ci` + `npm run build`; commits the PDF back with `GITHUB_TOKEN` — loop-safe since that token's pushes don't
+  re-trigger Actions; Cloudflare's git deploy serves it). **Site change:** contact section gained a solid
+  "Download portfolio (PDF) ↓" button (`index.html`). **Gotchas burned in:** (a) the viewers link `project.css` →
+  `scroll-behavior:smooth`, so capture MUST inject `scroll-behavior:auto` or `scrollTo` reads mid-animation (blank /
+  wrong-framing captures); (b) WebGL canvas screenshots could grab a **stale composited frame** at high progress →
+  force ~3 `requestAnimationFrame`s before each shot and capture beats **ascending** (hero last); (c) puppeteer v23
+  `screenshot()` returns a `Uint8Array`, not a Buffer — `Buffer.from()` before pngjs; (d) full-page cover/closing must
+  be `height:9.8in` (≈ page − the top+bottom margins, with slack) or they spill a phantom blank page; (e) **dark
+  full-bleed + page margins is impossible in pure Chrome** — it won't paint header/footer-template backgrounds AND
+  clips `position:fixed` to the content box, so any page margin prints as a WHITE strip; the fix is to render WITH
+  real margins (uniform top/bottom breathing, decoupled from section gaps) then **`pdf-lib`-paint the strips black +
+  draw page numbers** in post — which also gives accurate page totals (Chrome's footer `totalPages` was wrong).
+  Intermediates
+  (`/export.html`, `export/.cache/`, `export/node_modules/`) are gitignored; only the PDF is committed.
 - **2026-06-12** — **Landing page: skill popover closes on outside tap on mobile (iOS fix) + moved Skills right after
   the bio.** (1) **Mobile dismiss bug:** the skill-chip popover (`.skillpane`) only closed on scroll on mobile — tapping
   empty space did nothing. Root cause is the classic **iOS Safari quirk**: a `click` on a non-interactive area doesn't

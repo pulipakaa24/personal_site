@@ -1,1 +1,3 @@
 .DS_Store
+# generated PDF-build intermediate (the dossier HTML is rebuilt every run; only the PDF is committed)
+/export.html

@@ -1,0 +1,305 @@
+/* =====================================================================
+   DOSSIER STYLESHEET — paged-media restyle of the personal site.
+   The live site CSS is NOT loaded here; this re-implements the site's
+   visual identity (black + burnt-orange + bold uppercase) tuned for a
+   printed PDF, and styles the markup that build-pdf.mjs extracts verbatim
+   from index.html / the project pages / the viewer case studies.
+
+   Full-bleed dark: the page has zero margin (set in build-pdf.mjs), so the
+   black background reaches every edge — no white paper border. Page numbers
+   live in a reserved bottom strip via Puppeteer's footerTemplate.
+   ===================================================================== */
+
+/* ---------- vendored fonts (deterministic across Mac/Linux/recipients) ---------- */
+@font-face{font-family:Inter;font-weight:400;font-style:normal;font-display:block;src:url(fonts/inter-400.woff2) format("woff2")}
+@font-face{font-family:Inter;font-weight:500;font-style:normal;font-display:block;src:url(fonts/inter-500.woff2) format("woff2")}
+@font-face{font-family:Inter;font-weight:600;font-style:normal;font-display:block;src:url(fonts/inter-600.woff2) format("woff2")}
+@font-face{font-family:Inter;font-weight:700;font-style:normal;font-display:block;src:url(fonts/inter-700.woff2) format("woff2")}
+@font-face{font-family:Inter;font-weight:800;font-style:normal;font-display:block;src:url(fonts/inter-800.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:500;font-style:normal;font-display:block;src:url(fonts/jbmono-500.woff2) format("woff2")}
+
+:root{
+  --bg:#000; --fg:#fff;
+  --muted:rgba(255,255,255,.60);
+  --faint:rgba(255,255,255,.38);
+  --line:rgba(255,255,255,.14);
+  --card:rgba(255,255,255,.04);
+  --accent:#ff6a00;
+  --accent2:#19d3ff;
+  --ink:rgba(255,255,255,.82);
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;
+  -webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+
+html,body{background:var(--bg);color:var(--fg)}
+body{
+  font-family:Inter,"Helvetica Neue",Arial,sans-serif;
+  font-size:13.5px; line-height:1.55; letter-spacing:.002em;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+p{orphans:3;widows:3}
+h1,h2,h3,h4,h5,h6{break-after:avoid}
+em,i{font-style:italic}
+b,strong{font-weight:600;color:#fff}
+
+/* elements that exist in the extracted markup but make no sense on paper */
+nav,.scrollcue,.menu-toggle,.mobile-menu,.back,.statusline,.soon,.lightbox,
+.photo-hint,.d3,.videowrap,.hero-media .cap,.skillpane,.diag-hint{display:none !important}
+/* reveal-on-scroll is a screen effect — force everything visible */
+.reveal{opacity:1 !important;transform:none !important}
+
+/* ---------- page-flow utilities ---------- */
+.page-break{break-before:page}
+.avoid{break-inside:avoid}
+.doc{padding:0 64px}                          /* horizontal inset; vertical breathing room comes from the page margins */
+
+/* =====================================================================
+   COVER
+   ===================================================================== */
+.cover{
+  position:relative; height:9.8in; overflow:hidden;   /* page 11in − ~0.96in top+bottom margins, with slack */
+  display:flex; flex-direction:column; justify-content:center;
+  padding:0 64px; break-after:page;
+  background:
+    radial-gradient(760px circle at 84% 12%, rgba(255,106,0,.20), transparent 58%),
+    radial-gradient(620px circle at 6% 96%, rgba(25,211,255,.07), transparent 60%),
+    #000;
+}
+.cover::before{ /* fine grid texture, masked like the hero */
+  content:""; position:absolute; inset:0; opacity:.5; z-index:0;
+  background:
+    linear-gradient(to right, rgba(255,255,255,.05) 1px, transparent 1px) 0 0/58px 58px,
+    linear-gradient(to bottom, rgba(255,255,255,.05) 1px, transparent 1px) 0 0/58px 58px;
+  -webkit-mask-image:radial-gradient(circle at 64% 30%, #000, transparent 78%);
+          mask-image:radial-gradient(circle at 64% 30%, #000, transparent 78%);
+}
+.cover>*{position:relative;z-index:1}
+.cover .eyebrow{margin-bottom:6px}
+.cover h1{
+  font-weight:800; letter-spacing:-.035em; line-height:.86; text-transform:uppercase;
+  font-size:118px; margin:10px 0 0;
+}
+/* solid (not outlined) — -webkit-text-stroke renders as a rough "wireframe" in PDF export */
+.cover h1 .l2{color:rgba(255,255,255,.62)}
+.cover .lede{margin-top:30px; max-width:30em; font-size:17px; line-height:1.5; color:var(--muted)}
+.cover .lede b{color:#fff;font-weight:600}
+.cover .roles{
+  margin-top:26px; display:inline-flex; align-items:center; gap:11px;
+  font-size:13px; color:var(--muted); border:1px solid var(--line);
+  border-radius:999px; padding:9px 18px;
+}
+.cover .roles .dot{width:8px;height:8px;border-radius:50%;background:#39ff88}
+.cover-foot{
+  position:absolute; left:64px; right:64px; bottom:46px; z-index:1;
+  display:flex; justify-content:space-between; align-items:flex-end; gap:24px;
+  border-top:1px solid var(--line); padding-top:18px;
+}
+.cover-foot .who{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.cover-foot .links{display:flex;flex-direction:column;gap:4px;text-align:right;font-size:13px;color:var(--ink)}
+.cover-foot .links a span{color:var(--accent)}
+
+/* shared eyebrow (cover + sections) */
+.eyebrow{
+  font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:var(--faint);
+  display:inline-flex; align-items:center; gap:10px; font-weight:600;
+}
+.eyebrow::before{content:"";width:24px;height:1px;background:var(--accent);display:inline-block}
+.eyebrow .win{color:var(--accent);font-weight:700;letter-spacing:.06em}
+
+/* =====================================================================
+   SECTION SCAFFOLD
+   ===================================================================== */
+/* page-edge breathing room comes from the PDF page margins (added in post); section spacing
+   here is just inter-block margin, decoupled from the edge breathing */
+.section{padding:0 0 8px}
+.section.lead{break-before:page}        /* major sections start on a fresh page */
+.sec-head{margin-bottom:18px;break-after:avoid}
+.sec-head .idx{font-size:11px;letter-spacing:.28em;color:var(--faint);margin-bottom:10px;text-transform:uppercase}
+.sec-head h2{
+  font-size:40px; font-weight:800; letter-spacing:-.03em; line-height:1; text-transform:uppercase;
+}
+.sec-head .tagline{color:var(--muted);font-size:14px;margin-top:12px;max-width:62ch}
+
+/* =====================================================================
+   PROFILE / ABOUT
+   ===================================================================== */
+.profile{display:grid;grid-template-columns:230px 1fr;gap:40px;align-items:start}
+.profile .photo{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.profile .photo img{width:100%;filter:grayscale(1) contrast(1.04)}
+.profile .photo::after{content:"";position:absolute;inset:0;border-radius:14px;
+  box-shadow:inset 0 0 0 1px rgba(255,106,0,.0), inset -60px -60px 120px rgba(255,106,0,.10)}
+.about-body p{font-size:15px;color:var(--ink);margin-bottom:14px;max-width:60ch}
+.about-body p b{color:#fff;font-weight:600}
+
+/* facts grid (about + every case study) */
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:11px;overflow:hidden;margin:22px 0}
+.facts.two{grid-template-columns:repeat(2,1fr)}
+.facts div{background:#000;padding:13px 15px}
+.facts dt{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+.facts dd{font-size:12.5px;color:#fff;font-weight:500;line-height:1.4}
+
+/* =====================================================================
+   CONTENT BLOCKS (overview / problem / highlights / results …)
+   ===================================================================== */
+/* break-inside:avoid → a whole section ("The Brace") moves to the next page instead of splitting.
+   margin-top is the inter-section gap (collapses at page tops — the page margin handles edge breathing) */
+.block{margin:22px 0 0;break-inside:avoid}
+.block h2{font-size:21px;font-weight:800;letter-spacing:-.02em;text-transform:uppercase;margin-bottom:12px}
+.block h2::before{content:"";display:inline-block;width:20px;height:2px;background:var(--accent);
+  vertical-align:middle;margin-right:13px}
+.block p{color:var(--ink);font-size:13.5px;max-width:72ch;margin-bottom:10px}
+.block ul{list-style:none;max-width:72ch}
+.block ul li{color:var(--ink);font-size:13px;padding:5px 0 5px 20px;position:relative}
+.block ul li::before{content:"›";position:absolute;left:0;color:var(--accent);font-weight:800}
+code{font-family:var(--mono);font-size:.86em;background:rgba(255,255,255,.08);
+  border:1px solid var(--line);border-radius:5px;padding:.5px 5px;color:#fff;white-space:nowrap}
+
+/* deep-dive cards */
+.dives{display:grid;grid-template-columns:repeat(2,1fr);gap:13px;margin-top:6px}
+.dive{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:16px 18px;break-inside:avoid}
+.dive h3{font-size:14px;font-weight:700;margin-bottom:7px}
+.dive p{font-size:12.5px;color:var(--muted);margin:0;line-height:1.5;max-width:none}
+.dive ul{max-width:none}
+.dive ul li{font-size:12.5px;color:var(--muted);padding:3px 0 3px 18px}
+
+/* tags / tech-stack chips */
+.tags{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0}
+.tag{font-size:11px;letter-spacing:.02em;color:var(--muted);border:1px solid var(--line);
+  border-radius:6px;padding:4px 9px}
+
+/* external-link strip (GitHub / DevPost / …) — rendered as labelled chips with the URL kept */
+.linkstrip{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.linkstrip a{font-size:11.5px;font-weight:600;letter-spacing:.02em;color:#fff;
+  border:1px solid var(--line);border-radius:999px;padding:6px 13px}
+.linkstrip a::after{content:" ↗";color:var(--accent)}
+
+/* award pill (case-study hero) */
+.award{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;
+  color:var(--accent);background:rgba(255,106,0,.12);border:1px solid rgba(255,106,0,.4);
+  border-radius:999px;padding:5px 13px;margin-bottom:14px}
+
+/* image gallery + single figure */
+.gallery{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:14px 0;break-inside:avoid}
+.gallery figure{border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#0a0a0a;break-inside:avoid}
+.gallery img{width:100%;aspect-ratio:4/3;object-fit:cover}
+.gallery figcaption,.figure figcaption{padding:8px 12px;font-size:11px;color:var(--muted);
+  border-top:1px solid var(--line);line-height:1.4}
+.figure{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#0a0a0a;margin:14px 0;break-inside:avoid}
+.figure img{width:100%}
+/* two-column case-study hero (text left, image right) — mirrors the site's .phero .grid */
+.phero-grid{display:grid;grid-template-columns:1fr 0.82fr;gap:34px;align-items:center;margin:6px 0 4px}
+.phero-grid.solo{grid-template-columns:1fr}
+.phero-right img{width:100%;aspect-ratio:4/3;object-fit:cover;border:1px solid var(--line);border-radius:14px;display:block}
+
+/* the "watch" link cards that replace embedded videos */
+.watchlist{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.watch{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:10px;
+  padding:11px 14px;background:var(--card);break-inside:avoid}
+.watch .pl{flex:none;width:26px;height:26px;border-radius:50%;background:rgba(255,106,0,.14);
+  border:1px solid rgba(255,106,0,.4);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px}
+.watch .t{font-size:12.5px;color:#fff;font-weight:500}
+.watch .u{margin-left:auto;font-size:10.5px;color:var(--faint);font-family:var(--mono)}
+.watch::after{content:"↗";flex:none;margin-left:11px;color:var(--accent);font-size:13px;font-weight:700}
+
+/* =====================================================================
+   PROJECT case-study wrapper (one per project)
+   ===================================================================== */
+.project{break-before:page}
+.project .p-head{margin-bottom:6px}
+.project .p-kicker{font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+.project .p-kicker .n{color:var(--accent);font-weight:700;margin-right:10px}
+.project h1.p-title{font-size:46px;font-weight:800;letter-spacing:-.03em;line-height:.95;text-transform:uppercase;margin:4px 0 0}
+.project .lede{margin-top:16px;font-size:15.5px;line-height:1.5;color:var(--ink);max-width:60ch}
+.project .lede b{color:#fff;font-weight:600}
+
+/* =====================================================================
+   3D MODEL FIGURES (Phase 2) — hero render + captioned beat filmstrip
+   ===================================================================== */
+.render-hero{position:relative;margin:18px 0 6px;border:1px solid var(--line);border-radius:14px;
+  overflow:hidden;background:radial-gradient(120% 120% at 70% 16%, rgba(255,106,0,.10), transparent 58%), #050506;
+  break-inside:avoid}
+.render-hero img{width:100%;height:340px;object-fit:contain;display:block}
+.render-hero .badge{position:absolute;left:14px;bottom:12px;font-size:10px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--faint);background:rgba(0,0,0,.5);border:1px solid var(--line);
+  border-radius:7px;padding:5px 10px}
+.beats{display:grid;grid-template-columns:repeat(2,1fr);gap:13px;margin:22px 0 0;break-inside:avoid}
+.beat{border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#070708;break-inside:avoid}
+.beat .shot{height:172px;background:radial-gradient(120% 120% at 60% 20%, rgba(255,106,0,.08), transparent 60%),#070708;
+  display:flex;align-items:center;justify-content:center}
+.beat .shot img{width:100%;height:100%;object-fit:contain;padding:8px}
+.beat .cap{padding:11px 14px;border-top:1px solid var(--line)}
+.beat .cap .t{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.02em;display:block;margin-bottom:4px}
+.beat .cap .d{font-size:11.5px;color:var(--muted);line-height:1.5}
+
+/* =====================================================================
+   EXPERIENCE timeline
+   ===================================================================== */
+.timeline{position:relative;margin-left:5px;margin-top:6px}
+.timeline::before{content:"";position:absolute;left:6px;top:5px;bottom:8px;width:1px;background:var(--line)}
+/* tightened so the whole timeline + quote fit on one page (no split) */
+.tl{position:relative;padding:0 0 10px 34px;break-inside:avoid}
+.tl::before{content:"";position:absolute;left:0;top:4px;width:13px;height:13px;border-radius:50%;
+  background:#000;border:2px solid var(--faint)}
+.tl.now::before{border-color:var(--accent);background:var(--accent)}
+.tl .when{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.tl h4{font-size:15px;font-weight:700;margin-top:3px}
+.tl .org{color:var(--accent);font-weight:600}
+.tl p{color:var(--muted);font-size:12px;margin-top:3px;max-width:78ch;line-height:1.4}
+.quote{margin:12px 0 0 34px;border-left:2px solid var(--accent);padding:6px 0 6px 18px;max-width:74ch;break-inside:avoid}
+.quote p{font-size:14px;color:#fff;font-style:italic;line-height:1.4}
+.quote cite{display:block;margin-top:7px;font-style:normal;font-size:11.5px;color:var(--muted)}
+
+/* =====================================================================
+   SKILLS
+   ===================================================================== */
+.skillgroups{display:grid;grid-template-columns:repeat(2,1fr);gap:22px 40px;margin-top:6px}
+.skillgroups>div{break-inside:avoid}
+.skillgroups h6{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:11px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{font-size:12px;color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:5px 10px}
+
+/* =====================================================================
+   HONORS
+   ===================================================================== */
+.honors{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:6px}
+.honor{display:block;border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--card);break-inside:avoid}
+.honor .h-top{font-size:20px;font-weight:800;color:var(--accent)}
+.honor h5{font-size:13.5px;font-weight:700;margin-top:8px}
+.honor span{display:block;color:var(--muted);font-size:11px;margin-top:5px}
+.testscores{display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-top:13px;padding:13px 18px;
+  border:1px solid var(--line);border-radius:12px;background:var(--card);break-inside:avoid}
+.testscores .ts-label{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
+.testscores .ts-items{display:flex;gap:28px;flex-wrap:wrap}
+.testscores .ts-items div{font-size:12.5px;color:var(--muted)}
+.testscores .ts-items b{font-size:18px;font-weight:800;color:#fff;margin-right:1px}
+.testscores .ts-items i{font-style:normal;color:var(--faint)}
+
+/* =====================================================================
+   COURSEWORK
+   ===================================================================== */
+.coursegroups{display:grid;grid-template-columns:repeat(2,1fr);gap:20px 40px;margin-top:6px}
+.coursegroups>div{break-inside:avoid}
+.coursegroups h6{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+.course{display:flex;gap:12px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line)}
+.course .code{font-family:var(--mono);font-size:11px;color:var(--faint);min-width:72px}
+.course .name{font-size:12.5px;color:var(--ink)}
+.course .sem{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:auto;white-space:nowrap;opacity:.75}
+.course-note{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--faint);max-width:80ch}
+
+/* =====================================================================
+   CLOSING / contact
+   ===================================================================== */
+.closing{break-before:page;height:9.8in;display:flex;flex-direction:column;justify-content:center;
+  text-align:center;padding:0 64px;
+  background:radial-gradient(640px circle at 50% 30%, rgba(255,106,0,.14), transparent 60%), #000}
+.closing h2{font-size:74px;font-weight:800;letter-spacing:-.03em;line-height:.95;text-transform:uppercase}
+.closing .mail{display:inline-block;margin-top:22px;font-size:26px;color:var(--accent)}
+.closing .links{display:flex;gap:12px;justify-content:center;margin-top:30px;flex-wrap:wrap}
+.closing .links a{font-size:13px;font-weight:600;color:#fff;border:1px solid var(--line);border-radius:999px;padding:9px 18px}
+.closing .links a span{color:var(--accent)}
+.closing .sign{margin-top:46px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}

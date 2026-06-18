@@ -1,0 +1,59 @@
+name: Build portfolio PDF
+
+# Regenerate the dark dossier PDF from the live site content on every push to main,
+# then commit it back into assets/. Cloudflare Pages' git deploy serves the fresh file.
+# Loop-safe: pushes made with GITHUB_TOKEN do NOT re-trigger workflows.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'assets/Aditya-Pulipaka-Portfolio.pdf'   # don't re-run on our own output commit
+      - '.github/**'
+      - 'README.md'
+  workflow_dispatch:                              # allow manual rebuilds
+
+permissions:
+  contents: write                                # needed to commit the PDF back
+
+concurrency:                                     # cancel superseded runs on rapid pushes
+  group: build-pdf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Install build deps
+        working-directory: export
+        run: npm ci
+
+      - name: Render dossier PDF
+        working-directory: export
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+          SOFTWARE_GL: '1'          # GPU-less runner → software WebGL for the 3D viewers
+        run: npm run build
+
+      - name: Commit PDF if it changed
+        run: |
+          git config user.name  "portfolio-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add assets/Aditya-Pulipaka-Portfolio.pdf
+          if git diff --staged --quiet; then
+            echo "PDF unchanged — nothing to commit."
+          else
+            git commit -m "chore: rebuild portfolio PDF [skip ci]"
+            git push
+          fi

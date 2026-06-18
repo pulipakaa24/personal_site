@@ -1,0 +1,15 @@
+{
+  "name": "portfolio-pdf-export",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Build tool: render the personal site's content into an aesthetic dark-themed PDF dossier (text + 3D model beats). Dev/CI only — not shipped to the site.",
+  "scripts": {
+    "build": "node build-pdf.mjs"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pngjs": "^7.0.0",
+    "puppeteer-core": "^23.0.0"
+  }
+}

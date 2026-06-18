@@ -1,0 +1,5 @@
+node_modules/
+.cache/
+# build intermediates (the dossier HTML + captured 3D beat renders are regenerated every run)
+dist/
+export.html
