@@ -333,7 +333,7 @@
       <p>Months of "stable" PID and PPO results turned out to rest on three quiet defects. The coil
         integrator ran forward-Euler right at its stability limit, ringing in a way that made the
         actuator look ~40% faster than the real coil. The sensor-noise model was computed and then
-        silently discarded. And because a noise-free sim is perfectly symmetric, two genuinely unstable
+        silently discarded. And because a noise-free sim is perfectly symmetric, two unstable
         axes were simply never excited — every controller that "worked" had never actually been asked to
         stabilize them. The overhaul rebuilt the plant around honesty: exact coil integration, real
         noise, decoupled control/physics rates (240&nbsp;Hz control over 1.2&nbsp;kHz physics), actuation
