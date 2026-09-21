@@ -151,7 +151,7 @@
     <p class="lede"><b>LevSim</b> is the simulation environment I built so levitation controllers can be designed and tuned against the rig's <i>real</i> magnetic behaviour — not a hand-derived model that falls apart on contact with hardware.</p>
 
     <div class="tags reveal">
-      <span class="tag">Ansys FEA</span><span class="tag">SciKit-Learn</span><span class="tag">PyBullet</span><span class="tag">Gymnasium</span><span class="tag">PID · LQR · RL</span>
+      <span class="tag">Ansys FEA</span><span class="tag">SciKit-Learn</span><span class="tag">MuJoCo</span><span class="tag">Gymnasium</span><span class="tag">PID · LQR · RL</span>
     </div>
 
     <div class="actions reveal">
@@ -160,9 +160,9 @@
 
     <dl class="facts reveal">
       <div><dt>Role</dt><dd>CAD · All Software Architecture + Implementation · Ansys work guided by Aditya Matam &amp; Neha Ramachandran</dd></div>
-      <div><dt>Timeline</dt><dd>Nov – Dec 2025</dd></div>
-      <div><dt>Stack</dt><dd>Ansys Electronics Desktop · SciKit-Learn · PyBullet · Gymnasium</dd></div>
-      <div><dt>Status</dt><dd>Functional prototype</dd></div>
+      <div><dt>Timeline</dt><dd>Nov – Dec 2025 · realism &amp; MuJoCo overhaul Aug 2026</dd></div>
+      <div><dt>Stack</dt><dd>Ansys Electronics Desktop · SciKit-Learn · MuJoCo · Gymnasium</dd></div>
+      <div><dt>Status</dt><dd>Actively developed</dd></div>
     </dl>
 
     <section class="block reveal">
@@ -186,7 +186,7 @@
         <div style="padding:22px 16px; background:#0a0a0a; position:relative">
           <svg viewBox="0 0 900 570" role="img" aria-label="LevSim system architecture diagram" style="width:100%; height:auto; display:block">
             <title>LevSim system architecture</title>
-            <desc>An offline Ansys FEA sweep of a single yoke is fit to a polynomial force model. At run time, Lev_pod_env.py orchestrates a loop: it reads pod state from PyBullet, converts controller output to coil currents with maglev_coil.py, queries the MagLev Predictor for per-yoke force and torque, and feeds those back into PyBullet — all wrapped in a Gymnasium interface a PID, LQR, or RL controller can drive.</desc>
+            <desc>An offline Ansys FEA sweep of a single yoke is fit to a polynomial force model. At run time, the Gymnasium pod environment orchestrates a loop: it reads pod state from MuJoCo, converts controller output to coil currents with maglev_coil.py, queries the MagLev Predictor for per-yoke force and torque, and feeds those back into MuJoCo — all wrapped in a Gymnasium interface a PID, LQR, or RL controller can drive.</desc>
             <style>
               .nd{fill:#101013;stroke:#ffffff2b;stroke-width:1.5}
               .nd.acc{stroke:#ff6a00;stroke-width:1.8}
@@ -243,8 +243,8 @@
             <text class="s" x="120" y="370">PID · LQR · RL</text>
 
             <rect class="nd" x="690" y="320" width="180" height="72" rx="12"/>
-            <text class="t" x="780" y="348">PyBullet</text>
-            <text class="s" x="780" y="370">rigid-body dynamics · 240 Hz</text>
+            <text class="t" x="780" y="348">MuJoCo</text>
+            <text class="s" x="780" y="370">rigid-body dynamics · 1.2 kHz</text>
 
             <rect class="nd" x="300" y="470" width="200" height="72" rx="12"/>
             <text class="t" x="400" y="496">maglev_coil.py</text>
@@ -278,18 +278,19 @@
           <span class="diag-hint" aria-hidden="true">⤢ enlarge</span>
         </div>
         <figcaption>Two-phase architecture: an Ansys FEA sweep of a single yoke is distilled offline
-          into a polynomial force model, which a 240&nbsp;Hz runtime loop (<code>Lev_pod_env.py</code> ⇄
-          PyBullet) queries every step while a controller drives the pod. Redrawn from the project's
-          dataflow diagram.</figcaption>
+          into a polynomial force model, which the runtime loop (<code>Lev_pod_env.py</code> ⇄
+          MuJoCo, 240&nbsp;Hz control over 1.2&nbsp;kHz physics) queries every step while a controller
+          drives the pod. Redrawn from the project's dataflow diagram.</figcaption>
       </figure>
       <p>The pipeline splits in two. <b>Offline</b>, an Ansys magnetostatic model of a single yoke is
         swept across the coil currents, gap heights and roll angles the rig actually sees; the resulting
         force/torque table is fit to a polynomial (<code>Maglev_Model.pkl</code>) so it can be evaluated
-        in microseconds. <b>At run time</b>, <code>Lev_pod_env.py</code> is the orchestrator: each step it
-        pulls the pod's state from PyBullet, converts the controller's analog output into real coil
+        in microseconds. <b>At run time</b>, the Gymnasium pod environment is the orchestrator: each step
+        it pulls the pod's state from MuJoCo, converts the controller's PWM output into real coil
         currents with <code>maglev_coil.py</code>, asks the MagLev Predictor for the per-yoke force and
-        torque, and feeds those point loads back into PyBullet — all wrapped in a Gymnasium interface so
-        any controller can drive it.</p>
+        torque, and feeds those point loads back into MuJoCo — all wrapped in a Gymnasium interface so
+        any controller can drive it. It began life on PyBullet; the Aug 2026 overhaul below moved it to
+        MuJoCo and made the plant a great deal more honest.</p>
     </section>
 
     <section class="block reveal">
@@ -309,12 +310,14 @@
             polynomial evaluation — and makes the pipeline plug-and-play for new yoke designs.</p>
         </div>
         <div class="dive">
-          <h3>Why PyBullet + Gymnasium?</h3>
-          <p>PyBullet handles the rigid-body dynamics; a custom <code>maglev_coil</code> component models
-            coil current (including inductive impedance) so the force model gets <i>real</i> currents. Our
-            LUT-fit polynomial model ensures we have FEA-backed force and torque driving our simulation, and
-            Gymnasium standardizes the interface, so the same environment runs under PID
-            (<code>lev_PID</code>) or RL (<code>lev_PPO</code>).</p>
+          <h3>Why MuJoCo + Gymnasium?</h3>
+          <p>The physics engine handles the rigid-body dynamics; a custom <code>maglev_coil</code> component
+            models coil current so the force model gets <i>real</i> currents, and Gymnasium standardizes the
+            interface, so the same environment runs under PID (<code>lev_PID</code>) or RL
+            (<code>lev_PPO</code>). It started on PyBullet; in Aug 2026 I moved it to MuJoCo — a maintained
+            engine with named sites for sensors and force application (replacing a collision-shape-parsing
+            heuristic), world-frame force injection, and an MJX path to thousands of parallel envs when RL
+            training scales up. The visual meshes come from the same CAD GLB as the 3D viewer on this page.</p>
         </div>
         <div class="dive">
           <h3>How do you reuse it across controllers?</h3>
@@ -326,14 +329,90 @@
     </section>
 
     <section class="block reveal">
+      <h2>Making the sim honest (Aug 2026)</h2>
+      <p>Months of "stable" PID and PPO results turned out to rest on three quiet defects. The coil
+        integrator ran forward-Euler right at its stability limit, ringing in a way that made the
+        actuator look ~40% faster than the real coil. The sensor-noise model was computed and then
+        silently discarded. And because a noise-free sim is perfectly symmetric, two genuinely unstable
+        axes were simply never excited — every controller that "worked" had never actually been asked to
+        stabilize them. The overhaul rebuilt the plant around honesty: exact coil integration, real
+        noise, decoupled control/physics rates (240&nbsp;Hz control over 1.2&nbsp;kHz physics), actuation
+        latency, filtered PID derivatives, the CAD's measured mass properties, and the engine swap to
+        MuJoCo.</p>
+      <figure style="margin:18px 0 20px">
+        <div class="videowrap">
+          <video controls muted playsinline preload="metadata"
+            poster="../../assets/projects/guadaloop/mujoco_rig_studio.png"
+            src="../../assets/projects/guadaloop/mujoco_hover.mp4"></video>
+        </div>
+        <figcaption style="margin-top:8px; font-size:13px; color:rgba(255,255,255,.42)">The overhauled
+          sim: release from 13&nbsp;mm, settle at the 11.86&nbsp;mm target, take a 15&nbsp;N impulse +
+          random torque at t&nbsp;=&nbsp;4&nbsp;s, recover. Gap-cam inset watches the front pole faces;
+          HUD shows gap, attitude, coil currents and per-yoke force.</figcaption>
+      </figure>
+      <div class="dives">
+        <div class="dive">
+          <h3>The bug that hid an unstable axis</h3>
+          <p>With sensor noise accidentally disabled, the sim was perfectly fore-aft symmetric — so the
+            pitch axis was never disturbed, and nobody could see that its magnetic stiffness
+            (~250&nbsp;N·m/rad, destabilizing) outgunned the tuned controller by ~12×. Restore noise, even
+            10&nbsp;µm of it, and pitch ran away, doubling every ~50&nbsp;ms. The fix was structural:
+            attitude gains in the same class as the height loop, and a tuner search space that stopped
+            capping them an order of magnitude too low.</p>
+        </div>
+        <div class="dive">
+          <h3>Two sign errors, hiding each other</h3>
+          <p>Roll was worse: the env fed a left-handed roll angle into the right-handed FEA torque model,
+            which flipped the magnetic roll stiffness from destabilizing to <i>restoring</i> — an
+            artificial 4.3&nbsp;Hz rocking mode. And the PID's roll error was inverted. Each bug masked
+            the other: on the self-stabilizing fake plant, the tuner quietly learned to keep the
+            wrong-signed roll gain near zero. Found by tilting the pod ±1° with no controller and checking
+            the sign of the angular acceleration against physics — attraction across a gap <i>must</i>
+            grow a tilt.</p>
+        </div>
+        <div class="dive">
+          <h3>The flight envelope, from data</h3>
+          <p>With the CAD's real mass properties (10.52&nbsp;kg — a kilogram heavier than the sim had
+            assumed) the force model dictates a hard envelope: beyond ~14.7&nbsp;mm gap the ±10.2&nbsp;A
+            coils can't out-pull gravity, below ~7.5&nbsp;mm the permanent-magnet bias captures the pod
+            irrecoverably, so the usable release window is ~9–14&nbsp;mm and hover costs ~10&nbsp;A total.
+            Numbers a controller can't tune its way around — and exactly what the hardware team needs to
+            know before removing the guide slides.</p>
+        </div>
+        <div class="dive">
+          <h3>A live cockpit for the sim</h3>
+          <p>A standalone interactive demo (<code>live_demo.py</code>) runs the tuned closed loop in
+            MuJoCo with a control panel: poke the pod with forces at its corners and midpoints, kick it
+            with torques, start random-disturbance generators, retune the PID gains and target gap live,
+            and watch gap, attitude and all four coil currents on scrolling charts. The retuned controller
+            holds 11.85&nbsp;±&nbsp;0.04&nbsp;mm and returns to zero-mean roll after kicks up to
+            12.5&nbsp;N·m.</p>
+        </div>
+      </div>
+      <div class="gallery" style="margin-top:18px">
+        <figure>
+          <img src="../../assets/projects/guadaloop/mujoco_rig_top.png" alt="Top view of the MuJoCo pod model through the translucent track: two yokes with coil pairs and four gap sensors" loading="lazy"/>
+          <figcaption>Looking down through the translucent track plate at the MuJoCo model: yokes
+            (orange) with coil pairs, gap sensors (cyan), chassis (white) — geometry from the same CAD
+            as the viewer above, mass and inertia from the SolidWorks mass-properties report.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="block reveal">
       <h2>Results &amp; honest limits</h2>
       <ul>
-        <li>A repeatable simulation process that works for complex systems like maglev, grounded in FEA data and tested with both a hand-tuned
-          <b>PID</b> loop and a trained <b>PPO</b> policy.</li>
-        <li>The force model is only as good as the swept range — extrapolate far outside it and the
-          polynomial is unreliable.</li>
-        <li>It's a functional prototype: the coil model is a simplification, and fully closing the
-          sim-to-real gap still requires tuning runs on the physical rig, though our starting point improves considerably.</li>
+        <li>A repeatable simulation process that works for complex systems like maglev, grounded in FEA
+          data and tested with both a hand-tuned <b>PID</b> loop and a trained <b>PPO</b> policy — and,
+          since the overhaul, a plant honest enough to expose controllers that only worked on paper.</li>
+        <li>The tuned loop releases from anywhere in the feasible window, hovers at
+          11.85&nbsp;±&nbsp;0.04&nbsp;mm, and recovers from impulse and continuous random disturbances;
+          the residual 0.2° attitude jitter is exactly the sensor-noise floor.</li>
+        <li>The force model is only as good as the swept range — inputs are now clamped to the FEA's
+          validity hull (the 1/gap polynomial predicted 41&nbsp;kN where the data says 400&nbsp;N).</li>
+        <li>Still open: gap-dependent coil inductance + motional back-EMF from a new Ansys flux-linkage
+          sweep, sensor-noise calibration against the real Baumer sensors, and system-ID against rig
+          telemetry to close the sim-to-real loop for good.</li>
       </ul>
     </section>
 

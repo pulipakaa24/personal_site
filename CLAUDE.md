@@ -18,7 +18,7 @@
 > only have time for one doc update, update the Changelog + Roadmap. A stale context doc is worse
 > than none — it misleads the next agent.
 >
-> Last updated: **2026-06-12**.
+> Last updated: **2026-09-21**.
 
 ---
 
@@ -465,8 +465,17 @@ using the shared identity (`.award`/`.lede`/`.facts`/`.block`/`.dives`/`footer`)
 **redrawn SVG architecture diagram** (BlindMaster-style classes) of the LevSim dataflow: offline strip *Ansys FEA
 → force/torque LUT → polynomial `Maglev_Model.pkl`*, then a runtime hub-and-spoke around **`Lev_pod_env.py`**
 (Gymnasium env, 240 Hz) wired to MagLev Predictor, PyBullet, Controllers (PID/LQR/RL), and `maglev_coil.py`.
-The grouping editor still works: `exitEdit` now resolves at `dock.shownProgress`, and `enterEdit` **restores a
-full-screen canvas** (clears the inline dock sizing + `renderer.setSize`) so pressing **G** while docked opens
+**Case-study content updated 2026-09-21** for the lev_sim Aug-2026 overhaul (the sim itself lives in
+`/Users/adipu/Personal Site/Guadaloop/guadaloop_lev_control/lev_sim`, its own repo — see the auto-memory
+`lev-sim.md` + that repo's `SIM_REALISM_HANDOFF.md`): PyBullet → **MuJoCo** everywhere (tags, facts strip,
+architecture-diagram box now "MuJoCo · rigid-body dynamics · 1.2 kHz", caption, prose, and the "Why MuJoCo +
+Gymnasium?" dive), Timeline/Status facts updated, plus a new **"Making the sim honest (Aug 2026)"** `.block`
+between the dives and Results: intro para → local `<video>` (`assets/projects/guadaloop/mujoco_hover.mp4`,
+poster `mujoco_rig_studio.png`, uses the existing `.videowrap video` rule) → four `.dive` cards (hidden pitch
+instability, the two cancelling roll sign bugs, the CAD-mass flight envelope, the `live_demo.py` cockpit) → a
+one-figure `.gallery` (`mujoco_rig_top.png`). "Results & honest limits" bullets rewritten to the post-overhaul
+state. Landing-page Guadaloop card sub-line now says "FEA+MuJoCo". The grouping editor still works: `exitEdit`
+now resolves at `dock.shownProgress`, and `enterEdit` **restores a full-screen canvas** (clears the inline dock sizing + `renderer.setSize`) so pressing **G** while docked opens
 the editor full-screen. `viewer.css` hides `#case`/`#dockhint`/`#dockwin`/`#docktab` under `body.editing` so the
 case study can't paint over the editor canvas (z5 > z1).
 
@@ -594,6 +603,16 @@ git-tracked, agent-agnostic version — keep both current.
 ---
 
 ## 12. Changelog (what we've accomplished)
+
+- **2026-09-21** — **Guadaloop/LevSim case study updated for the sim's Aug-2026 overhaul** (the overhaul itself
+  happened in the separate `guadaloop_lev_control` repo: MuJoCo switch, realism fixes, two roll/pitch sign-bug
+  discoveries, CAD mass properties, retuned PID, interactive `live_demo.py`). Page changes in
+  `viewers/guadaloop/index.html`: PyBullet → MuJoCo across tags/facts/diagram/prose/dive; new "Making the sim
+  honest (Aug 2026)" section (local MP4 + poster + 4 dive cards + top-view still, new assets in
+  `assets/projects/guadaloop/`: `mujoco_hover.mp4` 2.2 MB, `mujoco_rig_studio.png`, `mujoco_rig_top.png`);
+  "Results & honest limits" rewritten; landing card sub-line now "FEA+MuJoCo". Verified headless (puppeteer
+  harness had to be reinstalled in `/private/tmp`; new `shotsec2.cjs` scrolls a `#case` heading into view via
+  `document.scrollingElement` — `scrollIntoView()` alone did NOT scroll this page). Console clean.
 
 Newest first. Append an entry whenever you ship something.
 
